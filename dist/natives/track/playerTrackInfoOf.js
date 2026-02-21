@@ -32,7 +32,7 @@ exports.default = new forgescript_1.NativeFunction({
         const player = linked.getPlayer(guildId.id);
         if (!player)
             return this.customError('Player not found');
-        return this.successJSON(player.queue.tracks[index]);
+        return this.successJSON(player.queue.tracks[index]?.info);
     },
 });
 //# sourceMappingURL=playerTrackInfoOf.js.map
