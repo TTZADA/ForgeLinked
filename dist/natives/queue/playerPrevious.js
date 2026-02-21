@@ -41,9 +41,7 @@ exports.default = new forgescript_1.NativeFunction({
             return this.customError('Position must be greater than 0');
         if (player.queue.previous.length < pos)
             return this.customError('Not enough tracks in history to go back that far');
-        const current = player.queue.current;
         const toRestore = player.queue.previous.splice(0, pos);
-        if (current) toRestore.push(current);
         toRestore.reverse();
         player.queue.tracks.unshift(...toRestore);
         player.skip();
