@@ -30,7 +30,9 @@ exports.default = new forgescript_1.NativeFunction({
         if (!player)
             return this.customError('Player not found');
         const prev = player.queue.previous[0];
-        if (prev?.info.identifier == player.queue.current?.info.identifier)
+        if (!prev)
+            return this.success(false);
+        if (prev.info.identifier === player.queue.current?.info.identifier)
             return this.success(false);
         return this.success(true);
     },
