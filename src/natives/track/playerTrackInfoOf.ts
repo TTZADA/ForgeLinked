@@ -30,6 +30,6 @@ export default new NativeFunction({
     if (!linked) return this.customError('ForgeLinked is not initialized')
     const player = linked.getPlayer(guildId.id)
     if (!player) return this.customError('Player not found')
-    return this.successJSON(player.queue.tracks[index])
+    return this.successJSON(player.queue.tracks[index]?.info)
   },
 })
