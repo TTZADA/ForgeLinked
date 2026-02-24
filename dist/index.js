@@ -11,7 +11,7 @@ const tiny_typed_emitter_1 = require("tiny-typed-emitter");
 const ForgeLinkedCommandManager_js_1 = require("./structures/ForgeLinkedCommandManager.js");
 const fs_1 = require("fs");
 
-const snapshotsPath = path_1.default.join(__dirname, 'queueSnapshots.json');
+const snapshotsPath = path_1.default.join(process.cwd(), 'queueSnapshots.json');
 
 function getDb() {
     if (!fs_1.existsSync(snapshotsPath)) {
