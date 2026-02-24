@@ -11,7 +11,7 @@ const tiny_typed_emitter_1 = require("tiny-typed-emitter");
 const ForgeLinkedCommandManager_js_1 = require("./structures/ForgeLinkedCommandManager.js");
 const fs_1 = require("fs");
 
-const dbPath = path_1.default.join(process.cwd(), 'queueSnapshots.json');
+const dbPath = path_1.default.join(require.main?.path || process.cwd(), 'queueSnapshots.json');
 
 function getDb() {
     if (!fs_1.existsSync(dbPath)) fs_1.writeFileSync(dbPath, JSON.stringify({}));
@@ -40,9 +40,11 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
     async init(client) {
         const start = Date.now();
         this.client = client;
-        const keepQueue = this.options.queue?.keepQueue ?? false;
-        const recoverAfterMs = this.options.queue?.recoverAfterMs ?? 0;
-        const recoverStates = this.options.queue?.recoverStates ?? ['all'];
+        
+        const queueConfig = this.options.queue || this.options.queueOptions || {};
+        const keepQueue = queueConfig.keepQueue ?? false;
+        const recoverAfterMs = queueConfig.recoverAfterMs ?? 0;
+        const recoverStates = queueConfig.recoverStates ?? ['all'];
 
         this.lavalink = new lavalink_client_1.LavalinkManager({
             nodes: this.options.nodes,
@@ -129,6 +131,8 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
         });
 
         if (keepQueue) {
+            forgescript_1.Logger.info('[ForgeLink] Persistência de fila ativada com sucesso!');
+
             setInterval(() => {
                 if (!this.lavalink.players.size) return;
                 const db = getDb();
@@ -141,6 +145,7 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
                             textChannelId: player.textChannelId,
                             tracks: [...player.queue.tracks],
                             current: player.queue.current,
+                            position: player.position || 0,
                             state: player.paused ? 'paused' : 'playing',
                             savedAt: Date.now()
                         };
@@ -169,6 +174,7 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
                     textChannelId: player.textChannelId,
                     tracks: [...player.queue.tracks],
                     current: player.queue.current ?? null,
+                    position: player.position || 0,
                     savedAt: Date.now(),
                     state: player.paused ? 'paused' : 'playing',
                 };
@@ -176,6 +182,7 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
             });
 
             this.lavalink.nodeManager.on('connect', (node) => {
+                forgescript_1.Logger.info(`[ForgeLink] Node do Lavalink conectado. Verificando resgates...`);
                 const db = getDb();
                 let needsSave = false;
                 
@@ -194,16 +201,20 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
                             if (snap.current) player.queue.current = snap.current;
                             if (snap.tracks && snap.tracks.length > 0) player.queue.add(snap.tracks);
 
-                            player.connect().then(() => {
+                            player.connect().then(async () => {
                                 if (snap.state === 'playing') {
-                                    player.play().catch(() => {});
+                                    await player.play().catch(() => {});
+                                    if (snap.position > 0) {
+                                        await player.seek(snap.position).catch(() => {});
+                                    }
+                                    forgescript_1.Logger.info(`[ForgeLink] Músicas restauradas para a Guild: ${guildId}`);
                                 }
                             }).catch(() => {});
 
                             delete db[guildId];
                             needsSave = true;
                         } catch (e) {
-                            forgescript_1.Logger.error(`[ForgeLink] Error retrieving the queue for ${guildId}: ${e.message}`);
+                            forgescript_1.Logger.error(`[ForgeLink] Falha ao restaurar fila da guild ${guildId}: ${e.message}`);
                         }
                     }
                 }
