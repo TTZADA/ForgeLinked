@@ -182,7 +182,7 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
             });
 
             this.lavalink.nodeManager.on('connect', (node) => {
-                forgescript_1.Logger.info(`[ForgeLink] Node do Lavalink conectado. Verificando resgates...`);
+                forgescript_1.Logger.info(`[ForgeLink] Lavalink node connected. Checking for recoveries...`);
                 const db = getDb();
                 let needsSave = false;
                 
@@ -207,14 +207,14 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
                                     if (snap.position > 0) {
                                         await player.seek(snap.position).catch(() => {});
                                     }
-                                    forgescript_1.Logger.info(`[ForgeLink] Músicas restauradas para a Guild: ${guildId}`);
+                                    forgescript_1.Logger.info(`[ForgeLink] Music restored for the Guild: ${guildId}`);
                                 }
                             }).catch(() => {});
 
                             delete db[guildId];
                             needsSave = true;
                         } catch (e) {
-                            forgescript_1.Logger.error(`[ForgeLink] Falha ao restaurar fila da guild ${guildId}: ${e.message}`);
+                            forgescript_1.Logger.error(`[ForgeLink] Failed to restore guild queue ${guildId}: ${e.message}`);
                         }
                     }
                 }
