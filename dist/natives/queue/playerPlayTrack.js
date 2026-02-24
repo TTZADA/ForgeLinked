@@ -16,11 +16,9 @@ exports.default = new forgescript_1.NativeFunction({
     async execute(ctx, [guildId, query, replaceCurrent, keepQueue]) {
         const lavalink = helpers_1.getLavalink(ctx);
         if (!lavalink) return this.customError('ForgeLinked is not initialized');
-        
         const player = lavalink.getPlayer(guildId.id);
         if (!player) return this.customError('Player not found for this guild');
-        
-        if (!player.connected) await player.connect().catch((e) => this.customError(`Failed to connect: ${e.message}`));
+        if (!player.connected) await player.connect().catch((e) => this.customError(e.message));
         
         const result = await player.search({ query, source: 'ytsearch' }, ctx.member).catch(() => null);
         if (!result || !result.tracks.length || result.loadType === 'empty') return this.customError('No results found');
@@ -30,22 +28,24 @@ exports.default = new forgescript_1.NativeFunction({
         const shouldKeepQueue = keepQueue ?? true;
         const isPlaylist = result.loadType === 'playlist';
         const tracks = isPlaylist ? result.tracks : [result.tracks[0]];
-
+        
         if (shouldReplace && player.queue.current) {
-            const trackToObliterate = player.queue.current;
-            
-            if (!shouldKeepQueue) player.queue.tracks.splice(0);
+            if (!shouldKeepQueue) {
+                player.queue.tracks.splice(0);
+            }
             player.queue.tracks.unshift(...tracks);
-            
             await player.skip(0, false);
             
-            const prevIndex = player.queue.previous.findIndex(t => t.info?.identifier === trackToObliterate.info?.identifier);
-            if (prevIndex !== -1) player.queue.previous.splice(prevIndex, 1);
+            if (Array.isArray(player.queue.previous)) {
+                player.queue.previous.splice(0, 1);
+            } else if (player.queue.previous) {
+                player.queue.previous = [];
+            }
         } else {
             player.queue.add(tracks.length === 1 ? tracks[0] : tracks);
             if (!player.playing && !player.paused) await player.play().catch((e) => this.customError(e.message));
         }
-
+        
         return this.successJSON({
             status: 'success', type: result.loadType,
             replaced: shouldReplace && !!player.queue.current,
