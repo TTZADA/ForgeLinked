@@ -5,7 +5,21 @@ const forgescript_1 = require("@tryforge/forgescript");
 const path_1 = require("path");
 const tiny_typed_emitter_1 = require("tiny-typed-emitter");
 const ForgeLinkedCommandManager_1 = require("./structures/ForgeLinkedCommandManager");
-const queueSnapshots = new Map();
+const fs_1 = require("fs");
+
+const snapshotsPath = path_1.join(__dirname, 'queueSnapshots.json');
+
+function getDb() {
+    if (!fs_1.existsSync(snapshotsPath)) {
+        fs_1.writeFileSync(snapshotsPath, JSON.stringify({}));
+    }
+    return JSON.parse(fs_1.readFileSync(snapshotsPath, 'utf8'));
+}
+
+function saveDb(data) {
+    fs_1.writeFileSync(snapshotsPath, JSON.stringify(data, null, 2));
+}
+
 class ForgeLinked extends forgescript_1.ForgeExtension {
     constructor(options) {
         super();
@@ -77,9 +91,33 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
                     savedAt: Date.now(),
                     state: player.paused ? 'paused' : 'playing',
                 };
-                queueSnapshots.set(player.guildId, snap);
+                const db = getDb();
+                db[player.guildId] = snap;
+                saveDb(db);
                 if (recoverAfterMs > 0) {
-                    setTimeout(() => { queueSnapshots.delete(player.guildId); }, recoverAfterMs);
+                    setTimeout(() => {
+                        const currentDb = getDb();
+                        delete currentDb[player.guildId];
+                        saveDb(currentDb);
+                    }, recoverAfterMs);
+                }
+            });
+            this.lavalink.on('playerCreate', async (player) => {
+                const snapshot = this.getQueueSnapshot(player.guildId);
+                if (snapshot && !player.queue.current) {
+                    if (snapshot.current) {
+                        player.queue.current = snapshot.current;
+                    }
+                    if (snapshot.tracks && snapshot.tracks.length > 0) {
+                        player.queue.add(snapshot.tracks);
+                    }
+                    try {
+                        if (!player.connected) await player.connect();
+                        if (snapshot.state === 'playing') {
+                            await player.play();
+                        }
+                        this.clearQueueSnapshot(player.guildId);
+                    } catch (err) {}
                 }
             });
         }
@@ -93,9 +131,15 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
                 });
             }
         }
-        this.lavalink.nodeManager.on('error', (error) => { forgescript_1.Logger.error('ForgeLinked Node Error:', error); });
     }
-    getQueueSnapshot(guildId) { return queueSnapshots.get(guildId); }
-    clearQueueSnapshot(guildId) { queueSnapshots.delete(guildId); }
+    getQueueSnapshot(guildId) {
+        const db = getDb();
+        return db[guildId] || null;
+    }
+    clearQueueSnapshot(guildId) {
+        const db = getDb();
+        delete db[guildId];
+        saveDb(db);
+    }
 }
 exports.ForgeLinked = ForgeLinked;
