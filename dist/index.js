@@ -11,21 +11,15 @@ const tiny_typed_emitter_1 = require("tiny-typed-emitter");
 const ForgeLinkedCommandManager_js_1 = require("./structures/ForgeLinkedCommandManager.js");
 const fs_1 = require("fs");
 
-const snapshotsPath = path_1.default.join(process.cwd(), 'queueSnapshots.json');
+const dbPath = path_1.default.join(process.cwd(), 'queueSnapshots.json');
 
 function getDb() {
-    if (!fs_1.existsSync(snapshotsPath)) {
-        fs_1.writeFileSync(snapshotsPath, JSON.stringify({}));
-    }
-    try {
-        return JSON.parse(fs_1.readFileSync(snapshotsPath, 'utf8'));
-    } catch (e) {
-        return {};
-    }
+    if (!fs_1.existsSync(dbPath)) fs_1.writeFileSync(dbPath, JSON.stringify({}));
+    try { return JSON.parse(fs_1.readFileSync(dbPath, 'utf8')); } catch { return {}; }
 }
 
 function saveDb(data) {
-    fs_1.writeFileSync(snapshotsPath, JSON.stringify(data, null, 2));
+    fs_1.writeFileSync(dbPath, JSON.stringify(data, null, 2));
 }
 
 class ForgeLinked extends forgescript_1.ForgeExtension {
@@ -85,6 +79,7 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
         });
 
         this.commands = new ForgeLinkedCommandManager_js_1.ForgeLinkedCommandManager(this.client);
+        
         forgescript_1.EventManager.load('ForgeLinked', path_1.default.join(__dirname, 'events'));
 
         if (this.options.events?.length) {
@@ -95,14 +90,42 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
             this.lavalink.sendRawData(packet).catch(() => null);
         });
 
-        this.load(path_1.default.join(__dirname, 'natives'));
+        const nativesPath = path_1.default.join(__dirname, 'natives');
+        if (fs_1.existsSync(nativesPath)) {
+            const getFiles = (dir) => {
+                let results = [];
+                const list = fs_1.readdirSync(dir);
+                list.forEach((file) => {
+                    file = path_1.default.join(dir, file);
+                    const stat = fs_1.statSync(file);
+                    if (stat && stat.isDirectory()) results = results.concat(getFiles(file));
+                    else if (file.endsWith('.js')) results.push(file);
+                });
+                return results;
+            };
+
+            const validFns = [];
+            const files = getFiles(nativesPath);
+            
+            for (const file of files) {
+                try {
+                    const req = require(file).default;
+                    if (req && req.name) {
+                        req.path = file;
+                        if (!req.data?.args?.length) req.data.unwrap = false;
+                        validFns.push(req);
+                    }
+                } catch (e) {}
+            }
+            
+            if (validFns.length > 0) {
+                forgescript_1.FunctionManager.addMany(validFns);
+            }
+        }
 
         client.on('clientReady', async () => {
             await new Promise((res) => setTimeout(res, 3000));
-            this.lavalink.init({
-                id: client.user.id,
-                username: client.user.username,
-            });
+            this.lavalink.init({ id: client.user.id, username: client.user.username });
         });
 
         if (keepQueue) {
@@ -111,9 +134,7 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
                     (recoverStates.includes('player') && player.playing) ||
                     (recoverStates.includes('pausedPlayers') && player.paused) ||
                     (recoverStates.includes('uniqueTracks') && !!player.queue.current);
-                
                 if (!shouldSnap) return;
-
                 const snap = {
                     guildId: player.guildId,
                     tracks: [...player.queue.tracks],
@@ -121,11 +142,9 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
                     savedAt: Date.now(),
                     state: player.paused ? 'paused' : 'playing',
                 };
-
                 const db = getDb();
                 db[player.guildId] = snap;
                 saveDb(db);
-
                 if (recoverAfterMs > 0) {
                     setTimeout(() => {
                         const currentDb = getDb();
@@ -136,16 +155,17 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
             });
 
             this.lavalink.on('playerCreate', async (player) => {
-                const snapshot = this.getQueueSnapshot(player.guildId);
+                const db = getDb();
+                const snapshot = db[player.guildId];
                 if (snapshot && !player.queue.current) {
                     if (snapshot.current) player.queue.current = snapshot.current;
-                    if (snapshot.tracks?.length > 0) player.queue.add(snapshot.tracks);
-                    
+                    if (snapshot.tracks && snapshot.tracks.length > 0) player.queue.add(snapshot.tracks);
                     try {
                         if (!player.connected) await player.connect();
                         if (snapshot.state === 'playing') await player.play();
-                        this.clearQueueSnapshot(player.guildId);
-                    } catch (e) {}
+                        delete db[player.guildId];
+                        saveDb(db);
+                    } catch (err) {}
                 }
             });
         }
@@ -168,10 +188,7 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
         console.debug(`ForgeLink: Initialized in ${Date.now() - start}ms`);
     }
 
-    getQueueSnapshot(guildId) {
-        return getDb()[guildId] || null;
-    }
-
+    getQueueSnapshot(guildId) { return getDb()[guildId] || null; }
     clearQueueSnapshot(guildId) {
         const db = getDb();
         delete db[guildId];
