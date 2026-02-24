@@ -126,25 +126,6 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
         client.on('clientReady', async () => {
             await new Promise((res) => setTimeout(res, 3000));
             this.lavalink.init({ id: client.user.id, username: client.user.username });
-
-            if (keepQueue) {
-                setTimeout(async () => {
-                    const db = getDb();
-                    for (const [guildId, snap] of Object.entries(db)) {
-                        let player = this.lavalink.getPlayer(guildId);
-                        if (!player && snap.voiceChannelId) {
-                            try {
-                                this.lavalink.createPlayer({
-                                    guildId: guildId,
-                                    voiceChannelId: snap.voiceChannelId,
-                                    textChannelId: snap.textChannelId,
-                                    selfDeaf: true
-                                });
-                            } catch (e) {}
-                        }
-                    }
-                }, 4000);
-            }
         });
 
         if (keepQueue) {
@@ -174,13 +155,15 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
                     (recoverStates.includes('player') && player.playing) ||
                     (recoverStates.includes('pausedPlayers') && player.paused) ||
                     (recoverStates.includes('uniqueTracks') && !!player.queue.current);
+                
+                const db = getDb();
                 if (!shouldSnap) {
-                    const db = getDb();
                     delete db[player.guildId];
                     saveDb(db);
                     return;
                 }
-                const snap = {
+                
+                db[player.guildId] = {
                     guildId: player.guildId,
                     voiceChannelId: player.voiceChannelId,
                     textChannelId: player.textChannelId,
@@ -189,35 +172,43 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
                     savedAt: Date.now(),
                     state: player.paused ? 'paused' : 'playing',
                 };
-                const db = getDb();
-                db[player.guildId] = snap;
                 saveDb(db);
-                if (recoverAfterMs > 0) {
-                    setTimeout(() => {
-                        const currentDb = getDb();
-                        delete currentDb[player.guildId];
-                        saveDb(currentDb);
-                    }, recoverAfterMs);
-                }
             });
 
-            this.lavalink.on('playerCreate', async (player) => {
+            this.lavalink.nodeManager.on('connect', (node) => {
                 const db = getDb();
-                const snapshot = db[player.guildId];
-                if (snapshot && !player.queue.current) {
-                    if (snapshot.current) player.queue.current = snapshot.current;
-                    if (snapshot.tracks && snapshot.tracks.length > 0) player.queue.add(snapshot.tracks);
-                    try {
-                        if (!player.connected && snapshot.voiceChannelId) {
-                            player.voiceChannelId = snapshot.voiceChannelId;
-                            player.textChannelId = snapshot.textChannelId;
-                            await player.connect();
+                let needsSave = false;
+                
+                for (const [guildId, snap] of Object.entries(db)) {
+                    let player = this.lavalink.getPlayer(guildId);
+                    
+                    if (!player && snap.voiceChannelId) {
+                        try {
+                            player = this.lavalink.createPlayer({
+                                guildId: guildId,
+                                voiceChannelId: snap.voiceChannelId,
+                                textChannelId: snap.textChannelId,
+                                selfDeaf: true
+                            });
+
+                            if (snap.current) player.queue.current = snap.current;
+                            if (snap.tracks && snap.tracks.length > 0) player.queue.add(snap.tracks);
+
+                            player.connect().then(() => {
+                                if (snap.state === 'playing') {
+                                    player.play().catch(() => {});
+                                }
+                            }).catch(() => {});
+
+                            delete db[guildId];
+                            needsSave = true;
+                        } catch (e) {
+                            forgescript_1.Logger.error(`[ForgeLink] Error retrieving the queue for ${guildId}: ${e.message}`);
                         }
-                        if (snapshot.state === 'playing') await player.play();
-                        delete db[player.guildId];
-                        saveDb(db);
-                    } catch (err) {}
+                    }
                 }
+                
+                if (needsSave) saveDb(db);
             });
         }
 
