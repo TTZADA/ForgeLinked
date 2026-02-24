@@ -30,11 +30,22 @@ exports.default = new forgescript_1.NativeFunction({
         const tracks = isPlaylist ? result.tracks : [result.tracks[0]];
         
         if (shouldReplace && player.queue.current) {
+            const interruptedTrack = player.queue.current;
+            
             if (!shouldKeepQueue) {
                 player.queue.tracks.splice(0);
+            } else {
+                player.queue.tracks.unshift(interruptedTrack);
             }
-            player.queue.tracks.unshift(...tracks);
-            await player.skip(0, false);
+            
+            if (tracks.length > 1) {
+                player.queue.tracks.unshift(...tracks.slice(1));
+            }
+            
+            await player.play({
+                track: tracks[0],
+                noReplace: false
+            });
             
             if (Array.isArray(player.queue.previous)) {
                 player.queue.previous.splice(0, 1);
