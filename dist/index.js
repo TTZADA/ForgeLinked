@@ -104,6 +104,7 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
         if (currentVol > 0) {
             state.originalVolume = currentVol;
         }
+    }
 
     async init(client) {
         const start = Date.now();
@@ -376,7 +377,6 @@ this.lavalink.on('trackEnd', (player) => {
         });
 
         console.debug(`ForgeLink: Initialized in ${Date.now() - start}ms`);
-    }
     }
 
     getQueueSnapshot(guildId) { return getDb()[guildId] || null; }
