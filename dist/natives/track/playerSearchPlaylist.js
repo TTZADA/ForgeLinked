@@ -22,16 +22,8 @@ exports.default = new forgescript_1.NativeFunction({
         if (!player) return this.customError('Player not found');
         const node = player.node;
         const finalQuery = source ? `${source}:${query}` : query;
-   
-    function format(host) {
-      const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
-
-            if (ipPattern.test(host)) {
-             return 'http';
-         }
-         return 'https';
-      }
-        const url = `${format(node.options.host)}://${node.options.host}/v4/loadsearch?query=${encodeURIComponent(finalQuery)}&types=playlist`;
+        const protocol = node.options.secure ? 'https' : 'http';
+        const url = `${protocol}://${node.options.host}/v4/loadsearch?query=${encodeURIComponent(finalQuery)}&types=playlist`;
         const response = await fetch(url, {
             headers: { Authorization: node.options.authorization },
         });
