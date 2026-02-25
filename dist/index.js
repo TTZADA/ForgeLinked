@@ -22,8 +22,7 @@ function saveDb(data) {
     fs_1.writeFileSync(dbPath, JSON.stringify(data, null, 2));
 }
 
-const crossfadeTimers = new Map();
-const crossfadeActive = new Set();
+const crossfadeState = new Map();
 
 class ForgeLinked extends forgescript_1.ForgeExtension {
     options;
@@ -40,64 +39,64 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
         this.options = options;
     }
 
-    setupCrossfade(player) {
+    startFadeIn(guildId, originalVolume, startMs) {
+        const state = crossfadeState.get(guildId);
+        if (!state) return;
+        state.fadeInActive = true;
+        state.fadeInStartTime = Date.now();
+        state.fadeInDuration = startMs;
+        state.fadeInTarget = originalVolume;
+        const player = this.lavalink.getPlayer(guildId);
+        if (player) player.setVolume(0);
+    }
+
+    tickCrossfade(player) {
         const cfg = this.options.crossfadeTracks;
         if (!cfg) return;
         const guildId = player.guildId;
+        const state = crossfadeState.get(guildId);
+        if (!state) return;
+
+        const now = Date.now();
+
+        if (state.fadeInActive) {
+            const elapsed = now - state.fadeInStartTime;
+            const progress = Math.min(elapsed / state.fadeInDuration, 1);
+            const newVol = Math.round(state.fadeInTarget * progress);
+            player.setVolume(newVol);
+            if (progress >= 1) {
+                state.fadeInActive = false;
+                player.setVolume(state.fadeInTarget);
+            }
+            return;
+        }
+
+        if (state.fadeOutActive) return;
+
         const track = player.queue.current;
         if (!track) return;
-        const trackDuration = track.info.duration;
+        const duration = track.info.duration;
         const endMs = cfg.endMs ?? 2000;
-        const startMs = cfg.startMs ?? 2000;
-        if (!trackDuration || trackDuration <= endMs) return;
-        const timeUntilFadeOut = (trackDuration - endMs) - player.position;
-        if (timeUntilFadeOut <= 0) return;
-        const existing = crossfadeTimers.get(guildId);
-        if (existing) clearTimeout(existing);
-        const timer = setTimeout(async () => {
-            crossfadeTimers.delete(guildId);
-            const currentPlayer = this.lavalink.getPlayer(guildId);
-            if (!currentPlayer || !currentPlayer.playing) return;
-            crossfadeActive.add(guildId);
-            const originalVolume = currentPlayer.volume;
-            const steps = 20;
-            const stepMs = endMs / steps;
-            const volumeStep = originalVolume / steps;
-            for (let i = 0; i < steps; i++) {
-                await new Promise((res) => setTimeout(res, stepMs));
-                const p = this.lavalink.getPlayer(guildId);
-                if (!p || !p.playing) break;
-                p.setVolume(Math.max(0, Math.round(originalVolume - volumeStep * (i + 1))));
-            }
-            const finalPlayer = this.lavalink.getPlayer(guildId);
-            if (!finalPlayer) {
-                crossfadeActive.delete(guildId);
-                return;
-            }
-            await finalPlayer.skip();
-            if (startMs > 0) {
-                const fadeSteps = 20;
-                const fadeStepMs = startMs / fadeSteps;
-                const fadeVolumeStep = originalVolume / fadeSteps;
-                finalPlayer.setVolume(0);
-                for (let i = 0; i < fadeSteps; i++) {
-                    await new Promise((res) => setTimeout(res, fadeStepMs));
-                    const p = this.lavalink.getPlayer(guildId);
-                    if (!p || !p.playing) break;
-                    p.setVolume(Math.min(originalVolume, Math.round(fadeVolumeStep * (i + 1))));
-                }
-                const p = this.lavalink.getPlayer(guildId);
-                if (p) p.setVolume(originalVolume);
-            }
-            crossfadeActive.delete(guildId);
-        }, timeUntilFadeOut);
-        crossfadeTimers.set(guildId, timer);
+        if (!duration || duration <= endMs) return;
+
+        const remaining = duration - player.position;
+        if (remaining > endMs) return;
+
+        state.fadeOutActive = true;
+        state.fadeOutStartTime = now;
+        state.fadeOutDuration = endMs;
+        state.originalVolume = player.volume;
     }
 
-    cancelCrossfade(guildId) {
-        const timer = crossfadeTimers.get(guildId);
-        if (timer) { clearTimeout(timer); crossfadeTimers.delete(guildId); }
-        crossfadeActive.delete(guildId);
+    tickFadeOut(player) {
+        const guildId = player.guildId;
+        const state = crossfadeState.get(guildId);
+        if (!state?.fadeOutActive) return;
+
+        const elapsed = Date.now() - state.fadeOutStartTime;
+        const progress = Math.min(elapsed / state.fadeOutDuration, 1);
+        const newVol = Math.round(state.originalVolume * (1 - progress));
+        player.setVolume(Math.max(0, newVol));
     }
 
     async init(client) {
@@ -109,6 +108,7 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
         const recoverAfterMs = queueConfig.recoverAfterMs ?? 0;
         const recoverStates = queueConfig.recoverStates ?? ['all'];
         const hasCrossfade = !!this.options.crossfadeTracks;
+        const tickInterval = this.options.playerOptions?.clientBasedPositionUpdateInterval ?? 50;
 
         this.lavalink = new lavalink_client_1.LavalinkManager({
             nodes: this.options.nodes,
@@ -117,12 +117,12 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
                 if (guild) guild.shard.send(payload);
                 return Promise.resolve();
             },
-            autoSkip: hasCrossfade ? false : (this.options.autoSkip ?? true),
+            autoSkip: this.options.autoSkip ?? true,
             autoSkipOnResolveError: this.options.autoSkipOnResolveError ?? true,
             emitNewSongsOnly: this.options.emitNewSongsOnly ?? true,
             playerOptions: {
                 applyVolumeAsFilter: this.options.playerOptions?.applyVolumeAsFilter ?? false,
-                clientBasedPositionUpdateInterval: this.options.playerOptions?.clientBasedPositionUpdateInterval ?? 50,
+                clientBasedPositionUpdateInterval: tickInterval,
                 defaultSearchPlatform: this.options.playerOptions?.defaultSearchPlatform ?? 'ytsearch',
                 volumeDecrementer: this.options.playerOptions?.volumeDecrementer ?? 0.75,
                 useUnresolvedData: this.options.playerOptions?.useUnresolvedData ?? true,
@@ -292,20 +292,53 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
         }
 
         if (hasCrossfade) {
+            const cfg = this.options.crossfadeTracks;
+            const startMs = cfg.startMs ?? 2000;
+
             this.lavalink.on('trackStart', (player) => {
-                this.setupCrossfade(player);
+                const state = crossfadeState.get(player.guildId);
+                const originalVolume = state?.originalVolume ?? player.volume;
+                crossfadeState.set(player.guildId, {
+                    fadeOutActive: false,
+                    fadeOutStartTime: 0,
+                    fadeOutDuration: 0,
+                    originalVolume,
+                    fadeInActive: false,
+                    fadeInStartTime: 0,
+                    fadeInDuration: 0,
+                    fadeInTarget: originalVolume,
+                });
+                if (startMs > 0) {
+                    this.startFadeIn(player.guildId, originalVolume, startMs);
+                }
             });
 
-            this.lavalink.on('trackEnd', (player, track, payload) => {
-                if (crossfadeActive.has(player.guildId)) return;
-                this.cancelCrossfade(player.guildId);
-                if (player.queue.tracks.length > 0) {
-                    player.play().catch(() => {});
+            this.lavalink.on('trackEnd', (player) => {
+                const state = crossfadeState.get(player.guildId);
+                if (state) {
+                    state.fadeOutActive = false;
+                    state.fadeInActive = false;
+                    if (state.originalVolume > 0) {
+                        player.setVolume(state.originalVolume);
+                    }
+                }
+            });
+
+            this.lavalink.on('playerUpdate', (player) => {
+                if (!player.playing || player.paused) return;
+                const state = crossfadeState.get(player.guildId);
+                if (!state) return;
+                if (state.fadeInActive) {
+                    this.tickCrossfade(player);
+                } else if (state.fadeOutActive) {
+                    this.tickFadeOut(player);
+                } else {
+                    this.tickCrossfade(player);
                 }
             });
 
             this.lavalink.on('playerDestroy', (player) => {
-                this.cancelCrossfade(player.guildId);
+                crossfadeState.delete(player.guildId);
             });
         }
 
