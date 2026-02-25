@@ -377,6 +377,7 @@ this.lavalink.on('trackEnd', (player) => {
 
         console.debug(`ForgeLink: Initialized in ${Date.now() - start}ms`);
     }
+    }
 
     getQueueSnapshot(guildId) { return getDb()[guildId] || null; }
 
