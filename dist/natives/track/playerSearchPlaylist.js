@@ -29,9 +29,17 @@ exports.default = new forgescript_1.NativeFunction({
         const response = await fetch(url, {
             headers: { Authorization: node.options.authorization },
         });
-        if (!response.ok)
-            return this.customError(`LavaSearch request failed: ${response.status} ${response.statusText}. Make sure the LavaSearch plugin is installed on your Lavalink server.`);
-        const data = await response.json();
+        if (response.status === 204) return this.customError('No playlists found!');
+        if (!response.ok) {
+            const text = await response.text().catch(() => '');
+            return this.customError(`LavaSearch request failed: ${response.status} ${response.statusText}${text ? ` — ${text}` : ''}`);
+        }
+        let data;
+        try {
+            data = await response.json();
+        } catch {
+            return this.customError('LavaSearch returned invalid JSON. Make sure the LavaSearch plugin is installed on your Lavalink node.');
+        }
         const playlists = data.playlists ?? [];
         const limited = limit ? playlists.slice(0, limit) : playlists;
         if (!limited.length) return this.customError('No playlists found!');
