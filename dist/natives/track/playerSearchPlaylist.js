@@ -21,9 +21,11 @@ exports.default = new forgescript_1.NativeFunction({
         const player = linked.getPlayer(guildId.id);
         if (!player) return this.customError('Player not found');
         const node = player.node;
-        const finalQuery = source ? `${source}:${query}` : query;
         const protocol = node.options.secure ? 'https' : 'http';
-        const url = `${protocol}://${node.options.host}/v4/loadsearch?query=${encodeURIComponent(finalQuery)}&types=playlist`;
+        const host = node.options.host;
+        const port = node.options.port;
+        const finalQuery = source ? `${source}:${query}` : query;
+        const url = `${protocol}://${host}:${port}/v4/loadsearch?query=${encodeURIComponent(finalQuery)}&types=playlist`;
         const response = await fetch(url, {
             headers: { Authorization: node.options.authorization },
         });
