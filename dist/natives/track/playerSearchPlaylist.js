@@ -22,7 +22,7 @@ exports.default = new forgescript_1.NativeFunction({
         if (!player) return this.customError('Player not found');
         const node = player.node;
         const finalQuery = source ? `${source}:${query}` : query;
-        const url = `${node.rest.url}/v4/loadsearch?query=${encodeURIComponent(finalQuery)}&types=playlist`;
+        const url = `${node.options.host}/v4/loadsearch?query=${encodeURIComponent(finalQuery)}&types=playlist`;
         const response = await fetch(url, {
             headers: { Authorization: node.options.authorization },
         });
