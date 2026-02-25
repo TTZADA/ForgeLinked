@@ -39,64 +39,63 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
         this.options = options;
     }
 
-    startFadeIn(guildId, originalVolume, startMs) {
-        const state = crossfadeState.get(guildId);
-        if (!state) return;
-        state.fadeInActive = true;
-        state.fadeInStartTime = Date.now();
-        state.fadeInDuration = startMs;
-        state.fadeInTarget = originalVolume;
-        const player = this.lavalink.getPlayer(guildId);
-        if (player) player.setVolume(0);
+    setPlayerVolume(player, vol) {
+        try {
+            if (typeof player.setVolume === 'function') {
+                player.setVolume(Math.max(0, Math.min(100, vol)));
+            } else {
+                player.volume = Math.max(0, Math.min(100, vol));
+            }
+        } catch {}
     }
 
-    tickCrossfade(player) {
+    getPlayerVolume(player) {
+        return typeof player.volume === 'number' ? player.volume : 80;
+    }
+
+    tickCrossfade(guildId) {
         const cfg = this.options.crossfadeTracks;
         if (!cfg) return;
-        const guildId = player.guildId;
         const state = crossfadeState.get(guildId);
         if (!state) return;
+        const player = this.lavalink.getPlayer(guildId);
+        if (!player) return;
 
         const now = Date.now();
 
         if (state.fadeInActive) {
             const elapsed = now - state.fadeInStartTime;
             const progress = Math.min(elapsed / state.fadeInDuration, 1);
-            const newVol = Math.round(state.fadeInTarget * progress);
-            player.setVolume(newVol);
+            const newVol = Math.round(state.originalVolume * progress);
+            this.setPlayerVolume(player, newVol);
             if (progress >= 1) {
                 state.fadeInActive = false;
-                player.setVolume(state.fadeInTarget);
+                this.setPlayerVolume(player, state.originalVolume);
             }
             return;
         }
 
-        if (state.fadeOutActive) return;
+        if (state.fadeOutActive) {
+            const elapsed = now - state.fadeOutStartTime;
+            const progress = Math.min(elapsed / state.fadeOutDuration, 1);
+            const newVol = Math.round(state.originalVolume * (1 - progress));
+            this.setPlayerVolume(player, Math.max(0, newVol));
+            return;
+        }
 
-        const track = player.queue.current;
+        const track = player.queue?.current;
         if (!track) return;
-        const duration = track.info.duration;
+        const duration = track.info?.duration;
         const endMs = cfg.endMs ?? 2000;
         if (!duration || duration <= endMs) return;
 
-        const remaining = duration - player.position;
+        const remaining = duration - (player.position || 0);
         if (remaining > endMs) return;
 
         state.fadeOutActive = true;
         state.fadeOutStartTime = now;
         state.fadeOutDuration = endMs;
-        state.originalVolume = player.volume;
-    }
-
-    tickFadeOut(player) {
-        const guildId = player.guildId;
-        const state = crossfadeState.get(guildId);
-        if (!state?.fadeOutActive) return;
-
-        const elapsed = Date.now() - state.fadeOutStartTime;
-        const progress = Math.min(elapsed / state.fadeOutDuration, 1);
-        const newVol = Math.round(state.originalVolume * (1 - progress));
-        player.setVolume(Math.max(0, newVol));
+        state.originalVolume = this.getPlayerVolume(player);
     }
 
     async init(client) {
@@ -108,7 +107,6 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
         const recoverAfterMs = queueConfig.recoverAfterMs ?? 0;
         const recoverStates = queueConfig.recoverStates ?? ['all'];
         const hasCrossfade = !!this.options.crossfadeTracks;
-        const tickInterval = this.options.playerOptions?.clientBasedPositionUpdateInterval ?? 50;
 
         this.lavalink = new lavalink_client_1.LavalinkManager({
             nodes: this.options.nodes,
@@ -122,7 +120,7 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
             emitNewSongsOnly: this.options.emitNewSongsOnly ?? true,
             playerOptions: {
                 applyVolumeAsFilter: this.options.playerOptions?.applyVolumeAsFilter ?? false,
-                clientBasedPositionUpdateInterval: tickInterval,
+                clientBasedPositionUpdateInterval: this.options.playerOptions?.clientBasedPositionUpdateInterval ?? 50,
                 defaultSearchPlatform: this.options.playerOptions?.defaultSearchPlatform ?? 'ytsearch',
                 volumeDecrementer: this.options.playerOptions?.volumeDecrementer ?? 0.75,
                 useUnresolvedData: this.options.playerOptions?.useUnresolvedData ?? true,
@@ -296,49 +294,47 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
             const startMs = cfg.startMs ?? 2000;
 
             this.lavalink.on('trackStart', (player) => {
-                const state = crossfadeState.get(player.guildId);
-                const originalVolume = state?.originalVolume ?? player.volume;
-                crossfadeState.set(player.guildId, {
+                const guildId = typeof player === 'string' ? player : player?.guildId;
+                if (!guildId) return;
+                const realPlayer = this.lavalink.getPlayer(guildId);
+                if (!realPlayer) return;
+                const originalVolume = this.getPlayerVolume(realPlayer);
+                crossfadeState.set(guildId, {
                     fadeOutActive: false,
                     fadeOutStartTime: 0,
                     fadeOutDuration: 0,
                     originalVolume,
-                    fadeInActive: false,
-                    fadeInStartTime: 0,
-                    fadeInDuration: 0,
-                    fadeInTarget: originalVolume,
+                    fadeInActive: startMs > 0,
+                    fadeInStartTime: Date.now(),
+                    fadeInDuration: startMs,
                 });
-                if (startMs > 0) {
-                    this.startFadeIn(player.guildId, originalVolume, startMs);
-                }
+                if (startMs > 0) this.setPlayerVolume(realPlayer, 0);
             });
 
             this.lavalink.on('trackEnd', (player) => {
-                const state = crossfadeState.get(player.guildId);
-                if (state) {
-                    state.fadeOutActive = false;
-                    state.fadeInActive = false;
-                    if (state.originalVolume > 0) {
-                        player.setVolume(state.originalVolume);
-                    }
+                const guildId = typeof player === 'string' ? player : player?.guildId;
+                if (!guildId) return;
+                const state = crossfadeState.get(guildId);
+                if (!state) return;
+                state.fadeOutActive = false;
+                state.fadeInActive = false;
+                const realPlayer = this.lavalink.getPlayer(guildId);
+                if (realPlayer && state.originalVolume > 0) {
+                    this.setPlayerVolume(realPlayer, state.originalVolume);
                 }
             });
 
             this.lavalink.on('playerUpdate', (player) => {
-                if (!player.playing || player.paused) return;
-                const state = crossfadeState.get(player.guildId);
-                if (!state) return;
-                if (state.fadeInActive) {
-                    this.tickCrossfade(player);
-                } else if (state.fadeOutActive) {
-                    this.tickFadeOut(player);
-                } else {
-                    this.tickCrossfade(player);
-                }
+                const guildId = typeof player === 'string' ? player : player?.guildId;
+                if (!guildId) return;
+                const realPlayer = this.lavalink.getPlayer(guildId);
+                if (!realPlayer || !realPlayer.playing || realPlayer.paused) return;
+                this.tickCrossfade(guildId);
             });
 
             this.lavalink.on('playerDestroy', (player) => {
-                crossfadeState.delete(player.guildId);
+                const guildId = typeof player === 'string' ? player : player?.guildId;
+                if (guildId) crossfadeState.delete(guildId);
             });
         }
 
