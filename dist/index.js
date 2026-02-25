@@ -40,14 +40,18 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
     }
 
     setPlayerVolume(player, vol) {
-        try {
-            if (typeof player.setVolume === 'function') {
-                player.setVolume(Math.max(0, Math.min(100, vol)));
-            } else {
-                player.volume = Math.max(0, Math.min(100, vol));
-            }
-        } catch {}
+    try {
+        const volume = Math.max(0, Math.min(100, vol));
+        if (player.setVolume && typeof player.setVolume === 'function') {
+            player.setVolume(volume);
+        } else {
+            player.volume = volume;
+        }
+    } catch (e) {
+        console.error("[ForgeLink] Error setting volume in player:", e.message);
     }
+}
+
 
     getPlayerVolume(player) {
         return typeof player.volume === 'number' ? player.volume : 80;
