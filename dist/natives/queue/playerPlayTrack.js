@@ -20,7 +20,11 @@ exports.default = new forgescript_1.NativeFunction({
         if (!player) return this.customError('Player not found for this guild');
         if (!player.connected) await player.connect().catch((e) => this.customError(e.message));
         
-        const result = await player.search({ query, source: 'ytsearch' }, ctx.member).catch(() => null);
+        const src = query.split(':')[0] || null;
+         if (!src) {
+             return this.customError('No search provider found.');
+         }
+        const result = await player.search({ query, source: src }, ctx.member).catch(() => null);
         if (!result || !result.tracks.length || result.loadType === 'empty') return this.customError('No results found');
         if (result.loadType === 'error') return this.customError('Lavalink returned an error');
         
