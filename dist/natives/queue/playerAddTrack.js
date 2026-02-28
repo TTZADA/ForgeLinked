@@ -42,8 +42,12 @@ exports.default = new forgescript_1.NativeFunction({
                     return this.customError(`Failed to connect to voice: ${connErr instanceof Error ? connErr.message : 'Unknown error'}`);
                 }
             }
+            const src = query.split(':')[0] || null;
+            if (!src) {
+             return this.customError('No search provider found.');
+            }
             const result = await player
-                .search({ query, source: 'ytsearch' }, ctx.member)
+                .search({ query, source: src }, ctx.member)
                 .catch(() => null);
             if (!result || !result.tracks.length || result.loadType === 'empty') {
                 return this.customError('No results found for the provided query.');
