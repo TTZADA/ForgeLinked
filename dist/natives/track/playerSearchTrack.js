@@ -56,11 +56,21 @@ exports.default = new forgescript_1.NativeFunction({
         const info = await player.node.fetchInfo();
         const supported = info.sourceManagers || [];
         let finalQuery = query;
+        const fixedSupported = (sources) => {
+         let youtubeCount = 0;
+          return sources.map(source => {
+          if (source === 'youtube') {
+             youtubeCount++;
+           return youtubeCount > 1 ? 'youtubemusic' : 'youtube';
+          }
+           return source;
+         });
+        };
         if (source) {
-            if (!supported.includes(source)) {
+            if (!fixedSupported.includes(source)) {
                 return this.customError(`Source '${source}' not supported by the Lavalink server`);
             }
-            finalQuery = `${source}:${query}`;
+            finalQuery = `${source.replace('youtubemusic', 'ytmsearch')}:${query}`;
         }
         const result = await player.search(finalQuery, {
             requester: requester?.id ?? ctx.member?.id,
