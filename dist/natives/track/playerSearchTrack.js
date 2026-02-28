@@ -56,7 +56,7 @@ exports.default = new forgescript_1.NativeFunction({
         const info = await player.node.fetchInfo();
         const supported = info.sourceManagers || [];
         let finalQuery = query;
-        const fixedSupported = (sources) => {
+        const mapSupported = (sources) => {
          let youtubeCount = 0;
           return sources.map(source => {
           if (source === 'youtube') {
@@ -66,6 +66,7 @@ exports.default = new forgescript_1.NativeFunction({
            return source;
          });
         };
+        const fixedSupported = mapSupported(supported);
         if (source) {
             if (!fixedSupported.includes(source)) {
                 return this.customError(`Source '${source}' not supported by the Lavalink server`);
