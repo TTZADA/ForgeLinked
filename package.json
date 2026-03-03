@@ -23,14 +23,14 @@
   "devDependencies": {
     "@trivago/prettier-plugin-sort-imports": "^5.2.2",
     "@tryforge/forgescript": "github:tryforge/ForgeScript#dev",
-    "@types/node": "^24.9.1",
-    "discord.js": "^14.23.2",
-    "dotenv": "^17.2.3",
-    "prettier": "^3.6.2",
+    "@types/node": "^24.11.0",
+    "discord.js": "^14.25.1",
+    "dotenv": "^17.3.1",
+    "prettier": "^3.8.1",
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "lavalink-client": "^2.6.2",
+    "lavalink-client": "^2.9.7",
     "opusscript": "^0.1.1",
     "tiny-typed-emitter": "^2.1.0"
   }
