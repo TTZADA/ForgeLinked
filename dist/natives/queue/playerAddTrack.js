@@ -1,31 +1,62 @@
+
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const forgescript_1 = require("@tryforge/forgescript");
 const index_js_1 = require("../../index.js");
 
+const SOURCE_MAP = {
+    spsearch: 'spotify',
+    dzsearch: 'deezer',
+    scsearch: 'soundcloud',
+    ytsearch: 'youtube',
+    ytmsearch: 'youtubemusic',
+    yt: 'youtube',
+    ytm: 'youtubemusic',
+    sp: 'spotify',
+    dz: 'deezer',
+    sc: 'soundcloud',
+};
+
 function parseMultiSource(query) {
+    const KNOWN = new Set(Object.keys(SOURCE_MAP));
     const parts = query.split(':');
     const sources = [];
-    let i = 0;
-    while (i < parts.length - 1) {
-        if (parts[i].endsWith('search') || ['yt', 'ytm', 'sp', 'dz', 'sc', 'spsearch', 'dzsearch', 'scsearch', 'ytsearch', 'ytmsearch'].includes(parts[i])) {
+    for (let i = 0; i < parts.length; i++) {
+        if (KNOWN.has(parts[i])) {
             sources.push(parts[i]);
-            i++;
         } else {
-            break;
+            return { sources, actualQuery: parts.slice(i).join(':') };
         }
     }
-    const actualQuery = parts.slice(i).join(':');
-    return { sources, actualQuery };
+    return { sources, actualQuery: '' };
+}
+
+function normalize(str) {
+    return str.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+}
+
+function isGoodMatch(track, actualQuery) {
+    const q = normalize(actualQuery);
+    const title = normalize(track.info.title);
+    const author = normalize(track.info.author);
+    return title.includes(q) || q.includes(title) || author.includes(q);
 }
 
 async function searchWithFallback(player, sources, actualQuery, requester) {
     for (const src of sources) {
         try {
-            const result = await player.search({ query: `${src}:${actualQuery}`, source: src }, requester).catch(() => null);
-            if (result && result.tracks.length && result.loadType !== 'empty' && result.loadType !== 'error') {
-                return { result, usedSource: src };
-            }
+            const result = await player.search(
+                { query: `${src}:${actualQuery}`, source: SOURCE_MAP[src] ?? src },
+                requester
+            ).catch(() => null);
+
+            if (!result || !result.tracks.length || result.loadType === 'empty' || result.loadType === 'error') continue;
+
+            const goodTracks = result.tracks.filter(t => isGoodMatch(t, actualQuery));
+            if (!goodTracks.length) continue;
+
+            result.tracks = goodTracks;
+            return { result, usedSource: src };
         } catch (_) {}
     }
     return null;
