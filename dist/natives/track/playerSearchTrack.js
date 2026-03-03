@@ -55,7 +55,7 @@ exports.default = new forgescript_1.NativeFunction({
 
         let result, usedSource;
 
-        if (sources.length > 1) {
+        if (sources.length >= 1) {
             const found = await searchWithFallback(player, sources, actualQuery, requester?.id ?? ctx.member?.id);
             if (!found) return this.customError('No results found in any source!');
             result = found.result;
