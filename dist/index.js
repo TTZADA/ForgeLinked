@@ -225,6 +225,33 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
             });
         }
 
+        this.lavalink.on('queueEnd', (player) => {
+                const shouldSnap = recoverStates.includes('all') ||
+                    (recoverStates.includes('player') && player.playing) ||
+                    (recoverStates.includes('pausedPlayers') && player.paused) ||
+                    (recoverStates.includes('uniqueTracks') && !!player.queue.current);
+                
+                const db = getDb();
+                if (!shouldSnap) {
+                    delete db[player.guildId];
+                    saveDb(db);
+                    return;
+                }
+                
+                db[player.guildId] = {
+                    guildId: player.guildId,
+                    voiceChannelId: player.voiceChannelId,
+                    textChannelId: player.textChannelId,
+                    tracks: [...player.queue.tracks],
+                    current: player.queue.current ?? null,
+                    position: player.position || 0,
+                    savedAt: Date.now(),
+                    state: player.paused ? 'paused' : 'playing',
+                };
+                saveDb(db);
+            });
+    }
+
         if (this.options.events?.length) {
             for (const linkedEvent of this.options.events) {
                 const lavalinkEvent = linkedEvent.startsWith('linked')
