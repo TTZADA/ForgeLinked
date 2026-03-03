@@ -250,7 +250,6 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
                 };
                 saveDb(db);
             });
-    }
 
         if (this.options.events?.length) {
             for (const linkedEvent of this.options.events) {
