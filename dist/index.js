@@ -67,10 +67,12 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
                     autoReconnect: this.options.playerOptions?.onDisconnect?.autoReconnect ?? true,
                     destroyPlayer: this.options.playerOptions?.onDisconnect?.destroyPlayer ?? false,
                 },
+                ...(this.options.playerOptions?.onEmptyQueue !== undefined ? {
                 onEmptyQueue: {
-                    destroyAfterMs: this.options.playerOptions?.onEmptyQueue?.destroyAfterMs ?? 30000,
+                    destroyAfterMs: this.options.playerOptions?.onEmptyQueue?.destroyAfterMs,
                     autoPlayFunction: this.options.autoPlayFunction,
                 },
+              } : {}),
             },
             queueOptions: {
                 maxPreviousTracks: this.options.queueOptions?.maxPreviousTracks ?? 10,
