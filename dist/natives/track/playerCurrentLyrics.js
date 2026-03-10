@@ -74,9 +74,9 @@ exports.default = new forgescript_1.NativeFunction({
                 if (lines[i].time <= position) currentIndex = i;
                 else break;
             }
-            const lastLine    = lines[currentIndex - 1]?.text?.trim() || '';
+            const lastLine    = lines[currentIndex - 1]?.text?.trim() || '...';
             const currentLine = lines[currentIndex]?.text?.trim()     || '...';
-            const nextLine    = lines[currentIndex + 1]?.text?.trim() || '';
+            const nextLine    = lines[currentIndex + 1]?.text?.trim() || '...';
             if (type === 'lastLine')    return this.success(lastLine);
             if (type === 'nextLine')    return this.success(nextLine);
             if (type === 'currentLine') return this.success(currentLine);
