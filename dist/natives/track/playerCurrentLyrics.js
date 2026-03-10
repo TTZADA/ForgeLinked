@@ -64,6 +64,11 @@ exports.default = new forgescript_1.NativeFunction({
             }
             if (type === 'synced') return this.success('true');
             const position = player.position ?? 0;
+            if (lines.length > 0 && position < lines[0].time) {
+                if (type === 'currentLine') return this.success('♪');
+                if (type === 'nextLine')    return this.success(lines[0].text?.trim() || '');
+                return this.success('');
+            }
             let currentIndex = 0;
             for (let i = 0; i < lines.length; i++) {
                 if (lines[i].time <= position) currentIndex = i;
