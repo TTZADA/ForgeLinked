@@ -1,4 +1,3 @@
-
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const forgescript_1 = require("@tryforge/forgescript");
@@ -17,29 +16,52 @@ const SOURCE_MAP = {
     sc: 'soundcloud',
 };
 
+const KNOWN_SOURCES = new Set(Object.keys(SOURCE_MAP));
+
 function parseMultiSource(query) {
-    const KNOWN = new Set(Object.keys(SOURCE_MAP));
     const parts = query.split(':');
     const sources = [];
-    for (let i = 0; i < parts.length; i++) {
-        if (KNOWN.has(parts[i])) {
-            sources.push(parts[i]);
-        } else {
-            return { sources, actualQuery: parts.slice(i).join(':') };
-        }
+    let i = 0;
+    while (i < parts.length && KNOWN_SOURCES.has(parts[i])) {
+        sources.push(parts[i]);
+        i++;
     }
-    return { sources, actualQuery: '' };
+    const actualQuery = parts.slice(i).join(':').trim();
+    return { sources, actualQuery };
 }
 
 function normalize(str) {
-    return str.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+    return str.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+}
+
+function wordOverlap(a, b) {
+    const wordsA = new Set(normalize(a).split(/\s+/).filter(Boolean));
+    const wordsB = new Set(normalize(b).split(/\s+/).filter(Boolean));
+    let shared = 0;
+    for (const w of wordsA) {
+        if (wordsB.has(w)) shared++;
+    }
+    const minLen = Math.min(wordsA.size, wordsB.size);
+    return minLen === 0 ? 0 : shared / minLen;
 }
 
 function isGoodMatch(track, actualQuery) {
-    const q = normalize(actualQuery);
-    const title = normalize(track.info.title);
-    const author = normalize(track.info.author);
-    return title.includes(q) || q.includes(title) || author.includes(q);
+    const combined = `${track.info.title} ${track.info.author}`;
+    return wordOverlap(combined, actualQuery) >= 0.4;
+}
+
+function pickBestTrack(tracks, actualQuery) {
+    let best = null;
+    let bestScore = -1;
+    for (const track of tracks) {
+        const combined = `${track.info.title} ${track.info.author}`;
+        const score = wordOverlap(combined, actualQuery);
+        if (score > bestScore) {
+            bestScore = score;
+            best = track;
+        }
+    }
+    return bestScore >= 0.4 ? best : null;
 }
 
 async function searchWithFallback(player, sources, actualQuery, requester) {
@@ -52,10 +74,15 @@ async function searchWithFallback(player, sources, actualQuery, requester) {
 
             if (!result || !result.tracks.length || result.loadType === 'empty' || result.loadType === 'error') continue;
 
-            const goodTracks = result.tracks.filter(t => isGoodMatch(t, actualQuery));
-            if (!goodTracks.length) continue;
+            if (result.loadType === 'playlist') return { result, usedSource: src };
 
-            result.tracks = goodTracks;
+            const best = pickBestTrack(result.tracks, actualQuery);
+            if (!best) {
+                result.tracks = [result.tracks[0]];
+                return { result, usedSource: src };
+            }
+
+            result.tracks = [best];
             return { result, usedSource: src };
         } catch (_) {}
     }
@@ -78,7 +105,7 @@ exports.default = new forgescript_1.NativeFunction({
             const extension = ctx.client.getExtension(index_js_1.ForgeLinked, true);
             if (!extension) return this.customError('ForgeLinked extension not found');
             const lavalink = extension.lavalink;
-            let player = lavalink.getPlayer(guildId.id);
+            const player = lavalink.getPlayer(guildId.id);
             if (!player) return this.customError('Player not found for this guild.');
 
             if (!player.connected) {
@@ -91,15 +118,16 @@ exports.default = new forgescript_1.NativeFunction({
             let result, usedSource;
 
             if (sources.length >= 1) {
+                if (!actualQuery) return this.customError('Query is empty after parsing sources.');
                 const found = await searchWithFallback(player, sources, actualQuery, ctx.member);
                 if (!found) return this.customError('No results found in any source.');
                 result = found.result;
                 usedSource = found.usedSource;
             } else {
-                const src = query.split(':')[0] || null;
-                if (!src) return this.customError('No search provider found.');
-                result = await player.search({ query, source: src }, ctx.member).catch(() => null);
-                usedSource = src;
+                result = await player.search({ query, source: query.split(':')[0] }, ctx.member).catch(() => null);
+                usedSource = query.split(':')[0];
+                if (!result || !result.tracks.length || result.loadType === 'empty') return this.customError('No results found for the provided query.');
+                if (result.loadType === 'error') return this.customError('An error occurred while fetching the track.');
             }
 
             if (!result || !result.tracks.length || result.loadType === 'empty') return this.customError('No results found for the provided query.');
