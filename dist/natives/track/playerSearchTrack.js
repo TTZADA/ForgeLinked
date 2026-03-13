@@ -16,49 +16,17 @@ const SOURCE_MAP = {
     sc: 'soundcloud',
 };
 
-function parseMultiSource(query) {
-    const KNOWN = new Set(Object.keys(SOURCE_MAP));
+const KNOWN_SOURCES = new Set(Object.keys(SOURCE_MAP));
+
+function parseQuery(query) {
     const parts = query.split(':');
     const sources = [];
-    for (let i = 0; i < parts.length; i++) {
-        if (KNOWN.has(parts[i])) {
-            sources.push(parts[i]);
-        } else {
-            return { sources, actualQuery: parts.slice(i).join(':') };
-        }
+    let i = 0;
+    while (i < parts.length && KNOWN_SOURCES.has(parts[i])) {
+        sources.push(parts[i]);
+        i++;
     }
-    return { sources, actualQuery: '' };
-}
-
-function normalize(str) {
-    return str.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
-}
-
-function isGoodMatch(track, actualQuery) {
-    const q = normalize(actualQuery);
-    const title = normalize(track.info.title);
-    const author = normalize(track.info.author);
-    return title.includes(q) || q.includes(title) || author.includes(q);
-}
-
-async function searchWithFallback(player, sources, actualQuery, requester) {
-    for (const src of sources) {
-        try {
-            const result = await player.search(
-                { query: `${src}:${actualQuery}`, source: SOURCE_MAP[src] ?? src },
-                requester
-            ).catch(() => null);
-
-            if (!result || !result.tracks.length || result.loadType === 'empty' || result.loadType === 'error') continue;
-
-            const goodTracks = result.tracks.filter(t => isGoodMatch(t, actualQuery));
-            if (!goodTracks.length) continue;
-
-            result.tracks = goodTracks;
-            return { result, usedSource: src };
-        } catch (_) {}
-    }
-    return null;
+    return { sources, actualQuery: parts.slice(i).join(':').trim() };
 }
 
 exports.default = new forgescript_1.NativeFunction({
@@ -81,28 +49,28 @@ exports.default = new forgescript_1.NativeFunction({
         const player = linked.getPlayer(guildId.id);
         if (!player) return this.customError('Player not found');
 
-        const { sources, actualQuery } = parseMultiSource(query);
+        const { sources, actualQuery } = parseQuery(query);
+        const searchTargets = sources.length
+            ? sources.map(src => ({ prefix: src, query: `${src}:${actualQuery}`, source: SOURCE_MAP[src] }))
+            : [{ prefix: source ?? null, query, source: source ?? query.split(':')[0] }];
 
-        let result, usedSource;
+        let result = null;
+        let usedSource = null;
 
-        if (sources.length >= 1) {
-            const found = await searchWithFallback(player, sources, actualQuery, requester?.id ?? ctx.member?.id);
-            if (!found) return this.customError('No results found in any source!');
-            result = found.result;
-            usedSource = found.usedSource;
-        } else {
-            const info = await player.node.fetchInfo();
-            const supported = info.sourceManagers || [];
-            let finalQuery = query;
-            if (source) {
-                if (!supported.includes(source)) return this.customError(`Source '${source}' not supported`);
-                finalQuery = `${source.replace('youtubemusic', 'ytmsearch')}:${query}`;
+        for (const target of searchTargets) {
+            const res = await player.search(
+                { query: target.query, source: target.source },
+                requester ?? ctx.member
+            ).catch(() => null);
+            if (res && res.tracks.length && res.loadType !== 'empty' && res.loadType !== 'error') {
+                result = res;
+                usedSource = target.prefix ?? target.source;
+                break;
             }
-            result = await player.search(finalQuery, { requester: requester?.id ?? ctx.member?.id });
-            usedSource = source;
         }
 
-        if (!result.tracks.length) return this.customError('No results found!');
+        if (!result || !result.tracks.length) return this.customError('No results found!');
+
         let tracks = result.tracks;
         if (limit) tracks = tracks.slice(0, limit);
 
