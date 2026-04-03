@@ -97,8 +97,9 @@ exports.default = new forgescript_1.NativeFunction({
             const position = player.position ?? 0;
 
             if (lines.length > 0 && position < lines[0].time) {
-                if (type === 'currentLine') return this.success('...');
+                if (type === 'currentLine') return this.success('♪');
                 if (type === 'nextLine') return this.success(lines[0].text?.trim() || '');
+                if (type === 'afterNextLine') return this.success(lines[1].text?.trim() || '');
                 return this.success('');
             }
 
