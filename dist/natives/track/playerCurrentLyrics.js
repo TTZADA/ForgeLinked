@@ -114,10 +114,10 @@ exports.default = new forgescript_1.NativeFunction({
             const nextLine    = lines[currentIndex + 1]?.text?.trim() || '♪';
             const afterNextLine    = lines[currentIndex + 2]?.text?.trim() || '♪';
 
-            if (type === 'beforeLastLine')    return this.success(lastLine);
+            if (type === 'beforeLastLine')    return this.success(beforeLastLine);
             if (type === 'lastLine')    return this.success(lastLine);
             if (type === 'nextLine')    return this.success(nextLine);
-            if (type === 'afterNextLine')    return this.success(nextLine);
+            if (type === 'afterNextLine')    return this.success(afterNextLine);
             if (type === 'currentLine') return this.success(currentLine);
             return this.success(JSON.stringify({ beforeLastLine, lastLine, currentLine, nextLine, afterNextLine, synced: true }));
         }
