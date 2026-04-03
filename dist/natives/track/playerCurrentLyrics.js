@@ -108,11 +108,11 @@ exports.default = new forgescript_1.NativeFunction({
                 else break;
             }
 
-            const beforeLastLine    = lines[currentIndex - 2]?.text?.trim() || '...';
-            const lastLine    = lines[currentIndex - 1]?.text?.trim() || '...';
-            const currentLine = lines[currentIndex]?.text?.trim()     || '...';
-            const nextLine    = lines[currentIndex + 1]?.text?.trim() || '...';
-            const afterNextLine    = lines[currentIndex + 2]?.text?.trim() || '...';
+            const beforeLastLine    = lines[currentIndex - 2]?.text?.trim() || '♪';
+            const lastLine    = lines[currentIndex - 1]?.text?.trim() || '♪';
+            const currentLine = lines[currentIndex]?.text?.trim()     || '♪';
+            const nextLine    = lines[currentIndex + 1]?.text?.trim() || '♪';
+            const afterNextLine    = lines[currentIndex + 2]?.text?.trim() || '♪';
 
             if (type === 'beforeLastLine')    return this.success(lastLine);
             if (type === 'lastLine')    return this.success(lastLine);
