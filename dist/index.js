@@ -149,7 +149,7 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
                                     selfDeaf: true
                                 });
 
-                                if (snap.current) player.queue.current = snap.current;
+                                if (snap.current) player.queue.add(snap.current);
                                 if (snap.tracks && snap.tracks.length > 0) player.queue.add(snap.tracks);
 
                                 player.connect().then(async () => {
