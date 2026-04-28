@@ -56,6 +56,7 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
             autoSkip: this.options.autoSkip ?? true,
             autoSkipOnResolveError: this.options.autoSkipOnResolveError ?? true,
             emitNewSongsOnly: this.options.emitNewSongsOnly ?? true,
+            playerUpdateInterval: 60000,
             playerOptions: {
                 applyVolumeAsFilter: this.options.playerOptions?.applyVolumeAsFilter ?? false,
                 clientBasedPositionUpdateInterval: this.options.playerOptions?.clientBasedPositionUpdateInterval ?? 50,
@@ -133,7 +134,7 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
 
             if (keepQueue) {
                 setTimeout(() => {
-                    forgescript_1.Logger.info(`[ForgeLink] Checking for queue recoveries...`);
+                    forgescript_1.Logger.info(`[ForgeLinked] Checking for queue recoveries...`);
                     const db = getDb();
                     let needsSave = false;
                     
@@ -141,32 +142,47 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
                         let player = this.lavalink.getPlayer(guildId);
                         
                         if (!player && snap.voiceChannelId) {
-                            try {
-                                player = this.lavalink.createPlayer({
-                                    guildId: guildId,
-                                    voiceChannelId: snap.voiceChannelId,
-                                    textChannelId: snap.textChannelId,
-                                    selfDeaf: true
-                                });
+    try {
+        player = this.lavalink.createPlayer({
+            guildId: guildId,
+            voiceChannelId: snap.voiceChannelId,
+            textChannelId: snap.textChannelId,
+            selfDeaf: true
+        });
 
-                                if (snap.current) player.queue.add(snap.current);
-                                if (snap.tracks && snap.tracks.length > 0) player.queue.add(snap.tracks);
+        if (snap.current && snap.current.encoded) {
+            player.queue.add(snap.current);
+        }
 
-                                player.connect().then(async () => {
-                                    if (snap.state === 'playing') {
-                                        await player.play().catch(() => {});
-                                        if (snap.position > 0) {
-                                            await player.seek(snap.position).catch(() => {});
-                                        }
-                                        forgescript_1.Logger.info(`[ForgeLink] Music restored for the Guild: ${guildId}`);
-                                    }
-                                }).catch(() => {});
+        if (snap.tracks?.length) {
+            const validTracks = snap.tracks.filter(t => t?.encoded);
+            if (validTracks.length) player.queue.add(validTracks);
+        }
 
-                                delete db[guildId];
-                                needsSave = true;
-                            } catch (e) {
-                                forgescript_1.Logger.error(`[ForgeLink] Failed to restore guild queue ${guildId}: ${e.message}`);
-                            }
+        await player.connect();
+
+        if (player.queue.current || player.queue.tracks.length) {
+            try {
+                await player.play();
+                if (snap.position > 0 && player.queue.current) {
+                    await player.seek(snap.position);
+                }
+                forgescript_1.Logger.info(`[ForgeLinked] Restored for ${guildId}`);
+            } catch (playError) {
+                forgescript_1.Logger.error(`[ForgeLinked] Fail to restore: ${playError.message}`);
+                player.destroy();
+            }
+        } else {
+            player.destroy();
+        }
+
+        delete db[guildId];
+        needsSave = true;
+
+    } catch (e) {
+        forgescript_1.Logger.error(`[ForgeLinked Error] Unknown error to ${guildId}: ${e.message}`);
+        if (player) player.destroy();
+    }
                         }
                     }
                     
@@ -268,7 +284,7 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
             forgescript_1.Logger.error('Lavalink Error:', error);
         });
 
-        console.debug(`ForgeLink: Initialized in ${Date.now() - start}ms`);
+        console.debug(`ForgeLinked: Initialized in ${Date.now() - start}ms`);
     }
 
     getQueueSnapshot(guildId) { return getDb()[guildId] || null; }
