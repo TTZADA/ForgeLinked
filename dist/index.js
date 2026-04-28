@@ -133,7 +133,7 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
             this.lavalink.init({ id: client.user.id, username: client.user.username });
 
             if (keepQueue) {
-                setTimeout(() => {
+                setTimeout(async () => {
                     forgescript_1.Logger.info(`[ForgeLinked] Checking for queue recoveries...`);
                     const db = getDb();
                     let needsSave = false;
