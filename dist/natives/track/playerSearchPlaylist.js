@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const forgescript_1 = require("@tryforge/forgescript");
 const index_js_1 = require("../../index.js");
 exports.default = new forgescript_1.NativeFunction({
-    name: '$playerSearchPlaylisy',
+    name: '$playerSearchPlaylist',
     description: 'Search for a playlist or a album',
     version: '1.0.0',
     brackets: true,
