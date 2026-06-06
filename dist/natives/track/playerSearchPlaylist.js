@@ -24,15 +24,15 @@ exports.default = new forgescript_1.NativeFunction({
         const protocol = node.options.secure ? 'https' : 'http';
         const host = node.options.host;
         const port = node.options.port;
-        const finalQuery = source ? `${source}:${query}` : query;
-        const url = `${protocol}://${host}:${port}/v4/loadsearch?query=${encodeURIComponent(finalQuery)}&types=playlist`;
+        const finalQuery = source ? `${source}:playlist:${query}` : query;
+        const url = `${protocol}://${host}:${port}/v4/loadtracks?identifier=${encodeURIComponent(finalQuery)}`;
         const response = await fetch(url, {
             headers: { Authorization: node.options.authorization },
         });
         if (response.status === 204) return this.customError('No playlists found!');
         if (!response.ok) {
             const text = await response.text().catch(() => '');
-            return this.customError(`LavaSearch request failed: ${response.status} ${response.statusText}${text ? ` — ${text}` : ''}`);
+            return this.customError(`Playlist Search request failed: ${response.status} ${response.statusText}${text ? ` — ${text}` : ''}`);
         }
         let data;
         try {
