@@ -3,58 +3,91 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const forgescript_1 = require("@tryforge/forgescript");
 const index_js_1 = require("../../index.js");
 exports.default = new forgescript_1.NativeFunction({
-    name: '$playerSearchPlaylist',
-    description: 'Search for playlists using LavaSearch plugin',
+    name: '$playerSearchPlaylisy',
+    description: 'Search for a playlist or a album',
     version: '1.0.0',
     brackets: true,
     unwrap: true,
     args: [
-        { name: 'guildId', description: 'The guild id', type: forgescript_1.ArgType.Guild, required: true, rest: false },
-        { name: 'query', description: 'The search query (e.g. "lofi hip hop")', type: forgescript_1.ArgType.String, required: true, rest: false },
-        { name: 'source', description: 'Source prefix: spsearch, ytsearch, ytmsearch, dzsearch...', type: forgescript_1.ArgType.String, required: false, rest: false },
-        { name: 'limit', description: 'Max number of playlists to return', type: forgescript_1.ArgType.Number, required: false, rest: false },
+        {
+            name: 'guildId',
+            description: 'The guild id to search for the track in',
+            type: forgescript_1.ArgType.Guild,
+            required: true,
+            rest: false,
+        },
+        {
+            name: 'query',
+            description: 'The query to search for',
+            type: forgescript_1.ArgType.String,
+            required: true,
+            rest: false,
+        },
+        {
+            name: 'source',
+            description: 'The source to use. Such as yt for youtube ytm for youtube music etc. Depends on the lavalink server config',
+            type: forgescript_1.ArgType.String,
+            required: false,
+            rest: false,
+        },
+        {
+            name: 'requester',
+            description: 'The requester of the track',
+            type: forgescript_1.ArgType.Member,
+            required: false,
+            rest: false,
+        },
+        {
+            name: 'limit',
+            description: 'The limit of the tracks to return',
+            type: forgescript_1.ArgType.Number,
+            required: false,
+            rest: false,
+        },
     ],
     output: forgescript_1.ArgType.Json,
-    async execute(ctx, [guildId, query, source, limit]) {
+    async execute(ctx, [guildId, query, source, requester, limit]) {
         const linked = ctx.client.getExtension(index_js_1.ForgeLinked, true).lavalink;
-        if (!linked) return this.customError('ForgeLinked is not initialized');
+        if (!linked)
+            return this.customError('ForgeLinked is not initialized');
         const player = linked.getPlayer(guildId.id);
-        if (!player) return this.customError('Player not found');
-        const node = player.node;
-        const protocol = node.options.secure ? 'https' : 'http';
-        const host = node.options.host;
-        const port = node.options.port;
-        const finalQuery = source ? `${source}:playlist:${query}` : query;
-        const url = `${protocol}://${host}:${port}/v4/loadtracks?identifier=${encodeURIComponent(finalQuery)}`;
-        const response = await fetch(url, {
-            headers: { Authorization: node.options.authorization },
+        if (!player)
+            return this.customError('Player not found');
+        const info = await player.node.fetchInfo();
+        const supported = info.sourceManagers || [];
+        let finalQuery = query;
+        let type;
+        if (source) {
+            if (!supported.includes(source)) {
+                return this.customError(`Source '${source}' not supported by the Lavalink server`);
+            }
+            type = source === 'spsearch' || source === 'spotify' ? 'album' : 'playlist'
+            finalQuery = `${source}:${type}:${query}`;
+        }
+        const result = await player.search(finalQuery, {
+            requester: requester?.id ?? ctx.member?.id,
         });
-        if (response.status === 204) return this.customError('No playlists found!');
-        if (!response.ok) {
-            const text = await response.text().catch(() => '');
-            return this.customError(`Playlist Search request failed: ${response.status} ${response.statusText}${text ? ` — ${text}` : ''}`);
-        }
-        let data;
-        try {
-            data = await response.json();
-        } catch {
-            return this.customError('LavaSearch returned invalid JSON. Make sure the LavaSearch plugin is installed on your Lavalink node.');
-        }
-        const playlists = data.playlists ?? [];
-        const limited = limit ? playlists.slice(0, limit) : playlists;
-        if (!limited.length) return this.customError('No playlists found!');
+        if (!result.tracks.length)
+            return this.customError('No results found!');
+        let tracks = result.tracks;
+        if (limit)
+            tracks = tracks.slice(0, limit);
         return this.successJSON({
             status: 'success',
-            source: source ?? 'default',
-            query,
-            count: limited.length,
-            playlists: limited.map((pl) => ({
-                name: pl.info?.name ?? pl.info?.title ?? 'Unknown',
-                url: pl.pluginInfo?.url ?? pl.info?.uri ?? null,
-                thumbnail: pl.pluginInfo?.artworkUrl ?? null,
-                author: pl.pluginInfo?.author ?? null,
-                trackCount: pl.pluginInfo?.totalTracks ?? pl.tracks?.length ?? 0,
+            source,
+            type: result.loadType,
+            message: `Found ${tracks.length} playlists matching the query.`,
+            requester: result.tracks[0].requester,
+            playlistsCount: tracks.length,
+            playlists: tracks.map((track) => ({
+                title: track.info.title,
+                author: track.info.author,
+                duration: track.info.duration,
+                url: track.info.uri,
+                thumbnail: track.info.artworkUrl,
+                source,
             })),
         });
     },
 });
+//# sourceMappingURL=playerSearchTrack.js.map
