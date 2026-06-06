@@ -57,7 +57,7 @@ exports.default = new forgescript_1.NativeFunction({
         const supported = info.sourceManagers || [];
         let finalQuery = query;
         if (source) {
-            if (!supported.includes(source)) {
+            if (!source.includes(supported)) {
                 return this.customError(`Source '${source}' not supported by the Lavalink server`);
             }
             finalQuery = `${source}:${query}`;
