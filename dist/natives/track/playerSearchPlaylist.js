@@ -61,8 +61,7 @@ exports.default = new forgescript_1.NativeFunction({
             if (!supported.includes(source)) {
                 return this.customError(`Source '${source}' not supported by the Lavalink server`);
             }
-            type = source === 'spsearch' || source === 'spotify' ? 'album' : 'playlist'
-            finalQuery = `${source}:${type}:${query}`;
+            finalQuery = `${source}:playlist:${query}`;
         }
         const result = await player.search(finalQuery, {
             requester: requester?.id ?? ctx.member?.id,
