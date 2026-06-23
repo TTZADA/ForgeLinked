@@ -31,6 +31,7 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
     lavalink;
     commands;
     emitter = new tiny_typed_emitter_1.TypedEmitter();
+    _restoring = false;
 
     constructor(options) {
         super();
@@ -38,9 +39,15 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
     }
 
     async _restorePlayers() {
+        if (this._restoring) return;
+        this._restoring = true;
+
         const db = getDb();
         const entries = Object.entries(db);
-        if (!entries.length) return;
+        if (!entries.length) {
+            this._restoring = false;
+            return;
+        }
 
         const queueConfig = this.options.queue || this.options.queueOptions || {};
         const recoverAfterMs = queueConfig.recoverAfterMs ?? 0;
@@ -118,6 +125,7 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
         }
 
         if (needsSave) saveDb(currentDb);
+        this._restoring = false;
     }
 
     async init(client) {
@@ -212,10 +220,6 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
         client.on('clientReady', async () => {
             await new Promise((res) => setTimeout(res, 3000));
             await this.lavalink.init({ id: client.user.id, username: client.user.username });
-
-            if (keepQueue) {
-                await this._restorePlayers();
-            }
         });
 
         if (keepQueue) {
