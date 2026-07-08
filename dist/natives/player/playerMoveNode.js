@@ -93,7 +93,7 @@ const newPlayer = await linked.createPlayer({
     volume: volume || 100,
     selfDeaf: selfDeaf || true,
     selfMute: selfMute || false,
-    node: node || undefined,
+    node: nodeId || undefined,
 });
 
 await newPlayer.connect();
