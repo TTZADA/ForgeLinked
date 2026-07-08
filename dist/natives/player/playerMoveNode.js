@@ -73,7 +73,7 @@ exports.default = new forgescript_1.NativeFunction({
             player.pause();
         }
 
-        await player.moveNode(targetNode);
+        await player.moveNode(targetNode.id);
         
         if (resumeAfter && player.paused && player.queue.current) {
             player.resume();
