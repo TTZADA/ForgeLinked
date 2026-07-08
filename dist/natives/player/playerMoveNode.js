@@ -73,11 +73,6 @@ exports.default = new forgescript_1.NativeFunction({
         }
 
         try {
-            if (typeof player.changeNode === 'function') {
-                await player.changeNode(targetNode);
-                return this.success(true);
-            }
-
             const currentTrack = player.queue.current;
             const lastPosition = player.position || 0;
             const wasPaused = player.paused;
