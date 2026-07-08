@@ -89,7 +89,7 @@ exports.default = new forgescript_1.NativeFunction({
             }
 
             const newPlayer = await linked.createPlayer({
-                guildId: guildId.id,
+                guildId: guildId,
                 voiceChannelId: voiceChannelId,
                 textChannelId: textChannelId,
                 volume: currentVolume,
