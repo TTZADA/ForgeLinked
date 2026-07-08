@@ -24,13 +24,6 @@ exports.default = new forgescript_1.NativeFunction({
             rest: false,
         },
         {
-            name: 'delay',
-            description: 'Delay in milliseconds before moving the node',
-            type: forgescript_1.ArgType.Number,
-            required: false,
-            rest: false,
-        },
-        {
             name: 'pauseBefore',
             description: 'Whether to pause the player before moving',
             type: forgescript_1.ArgType.Boolean,
@@ -39,7 +32,7 @@ exports.default = new forgescript_1.NativeFunction({
         },
     ],
     output: forgescript_1.ArgType.Boolean,
-    async execute(ctx, [guildId, nodeId, delay, pauseBefore]) {
+    async execute(ctx, [guildId, nodeId, pauseBefore]) {
         const linked = ctx.client.getExtension(index_js_1.ForgeLinked, true).lavalink;
         if (!linked)
             return this.customError('ForgeLinked is not initialized');
@@ -66,59 +59,80 @@ exports.default = new forgescript_1.NativeFunction({
         if (player.get('internal_nodeChanging') === true)
             return this.customError('Player is already changing node, please wait');
 
-        if (delay && delay > 0) {
-            await new Promise((res) => setTimeout(res, delay));
-        }
-
         if (pauseBefore && !player.paused && player.queue.current) {
             await player.pause(true);
         }
 
         player.set('internal_nodeChanging', true);
 
-try {
-    const currentTrack = player.queue.current;
-    const lastPosition = player.lastPosition || player.position || 0;
-    const wasPaused = player.paused;
-    const lavalinkVolume = player.lavalinkVolume;
-    
-    const voiceState = {
-        token: player.voice.token,
-        endpoint: player.voice.endpoint,
-        sessionId: player.voice.sessionId,
-    };
+        try {
+            const currentTrack = player.queue.current;
+            const lastPosition = player.lastPosition || player.position || 0;
+            const wasPaused = player.paused;
+            const lavalinkVolume = player.lavalinkVolume;
+            const voiceChannelId = player.voiceChannelId;
 
-    if (player.node && player.node.connected) {
-        await player.node.destroyPlayer(player.guildId);
-    }
+            if (player.node.connected) {
+                await player.node.destroyPlayer(player.guildId);
+            }
 
-    await new Promise(res => setTimeout(res, 500));
+            const freshVoiceState = await new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    ctx.client.ws.removeListener('VOICE_SERVER_UPDATE', handler);
+                    reject(new Error('VOICE_SERVER_UPDATE timeout after 5000ms'));
+                }, 5000);
 
-    player.node = targetNode;
+                const handler = (data) => {
+                    if (data.guild_id !== player.guildId) return;
+                    clearTimeout(timeout);
+                    ctx.client.ws.removeListener('VOICE_SERVER_UPDATE', handler);
+                    resolve({
+                        token: data.token,
+                        endpoint: data.endpoint,
+                        sessionId: player.voice.sessionId,
+                    });
+                };
 
-    if (player.voice) {
-        player.voice.initialized = false; 
-    }
+                ctx.client.ws.on('VOICE_SERVER_UPDATE', handler);
 
-    await targetNode.updatePlayer({
-        guildId: player.guildId,
-        noReplace: false,
-        playerOptions: {
-            voice: voiceState,
-            ...(currentTrack && {
-                track: currentTrack,
-                position: lastPosition,
-                volume: lavalinkVolume,
-                paused: wasPaused,
-            }),
-        },
-    });
+                const guild = ctx.client.guilds.cache.get(player.guildId);
+                if (guild) {
+                    guild.shard.send({
+                        op: 4,
+                        d: {
+                            guild_id: player.guildId,
+                            channel_id: voiceChannelId,
+                            self_mute: false,
+                            self_deaf: player.selfDeaf ?? false,
+                        },
+                    });
+                } else {
+                    clearTimeout(timeout);
+                    ctx.client.ws.removeListener('VOICE_SERVER_UPDATE', handler);
+                    reject(new Error('Guild not found in cache'));
+                }
+            });
 
-    await new Promise((res) => setTimeout(res, 100));
-    await player.filterManager.applyPlayerFilters();
+            player.node = targetNode;
 
-    return this.success(true);
-} catch (e) {
+            await targetNode.updatePlayer({
+                guildId: player.guildId,
+                noReplace: false,
+                playerOptions: {
+                    voice: freshVoiceState,
+                    ...(currentTrack && {
+                        track: currentTrack,
+                        position: lastPosition,
+                        volume: lavalinkVolume,
+                        paused: wasPaused,
+                    }),
+                },
+            });
+
+            await player.filterManager.applyPlayerFilters();
+
+            return this.success(true);
+        } catch (e) {
             return this.customError(`Failed to move node: ${e.message}`);
         } finally {
             player.set('internal_nodeChanging', undefined);
