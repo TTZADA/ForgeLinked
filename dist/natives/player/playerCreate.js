@@ -98,7 +98,7 @@ async execute(ctx, [guildId, voiceId, textId, volume, selfDeaf, selfMute, node])
         player.voice?.token &&
         player.voice?.endpoint &&
         player.voice?.sessionId &&
-        player.node?.options?.id?.includes('Premium')
+        node.includes('Premium')
     ) {
         await player.node.updatePlayer({
             guildId: player.guildId,
