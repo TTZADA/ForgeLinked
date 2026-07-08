@@ -73,7 +73,45 @@ exports.default = new forgescript_1.NativeFunction({
         }
 
         try {
-            await player.changeNode(targetNode.id);
+            const currentTrack = player.queue.current;
+            const lastPosition = player.position || 0;
+            const wasPaused = player.paused;
+            const currentQueue = [...player.queue.tracks];
+            
+            const voiceChannelId = player.voiceChannel; 
+            const textChannelId = player.textChannel || ctx.channel?.id;
+            const currentVolume = player.volume || 100;
+            const isSelfDeaf = player.options?.selfDeaf ?? true;
+            const isSelfMuted = player.options?.selfMute ?? false;
+
+            if (player.node && player.node.connected) {
+                await player.node.destroyPlayer(player.guildId);
+            }
+
+            const newPlayer = await linked.createPlayer({
+                guildId: guildId.id,
+                voiceChannelId: voiceChannelId,
+                textChannelId: textChannelId,
+                volume: currentVolume,
+                selfDeaf: isSelfDeaf,
+                selfMute: isSelfMuted,
+                node: targetNode.id,
+            });
+
+            await newPlayer.connect();
+
+            if (currentQueue.length > 0) {
+                newPlayer.queue.add(currentQueue);
+            }
+
+            if (currentTrack) {
+                await newPlayer.play({
+                    track: currentTrack,
+                    start: lastPosition,
+                    paused: wasPaused
+                });
+            }
+
             return this.success(true);
         } catch (e) {
             return this.customError(`Failed to move node: ${e.message}`);
