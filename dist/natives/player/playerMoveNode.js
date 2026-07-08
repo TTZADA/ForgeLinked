@@ -4,7 +4,7 @@ const forgescript_1 = require("@tryforge/forgescript");
 const index_js_1 = require("../../index.js");
 exports.default = new forgescript_1.NativeFunction({
     name: '$playerMoveNode',
-    description: 'Move a player to a different lavalink node',
+    description: 'Move a player to a different lavalink node without triggering a Discord voice reconnect',
     version: '1.0.0',
     brackets: true,
     unwrap: true,
@@ -37,16 +37,9 @@ exports.default = new forgescript_1.NativeFunction({
             required: false,
             rest: false,
         },
-        {
-            name: 'resumeAfter',
-            description: 'Whether to resume the player after moving',
-            type: forgescript_1.ArgType.Boolean,
-            required: false,
-            rest: false,
-        },
     ],
     output: forgescript_1.ArgType.Boolean,
-    async execute(ctx, [guildId, nodeId, delay, pauseBefore, resumeAfter]) {
+    async execute(ctx, [guildId, nodeId, delay, pauseBefore]) {
         const linked = ctx.client.getExtension(index_js_1.ForgeLinked, true).lavalink;
         if (!linked)
             return this.customError('ForgeLinked is not initialized');
@@ -57,29 +50,71 @@ exports.default = new forgescript_1.NativeFunction({
 
         const targetNode = nodeId
             ? linked.nodeManager.nodes.get(nodeId)
-            : linked.nodeManager.leastUsedNodes[0];
+            : Array.from(linked.nodeManager.leastUsedNodes('playingPlayers')).find(
+                (n) => n.connected && n.options.id !== player.node?.options?.id
+              );
 
-        if (!targetNode)
+        if (!targetNode || !targetNode.connected)
             return this.customError('Target node not found or unavailable');
 
         if (targetNode.id === player.node?.id)
             return this.success(false);
+
+        if (!player.voice?.endpoint || !player.voice?.sessionId || !player.voice?.token)
+            return this.customError('Voice state is missing, cannot move node');
+
+        if (player.get('internal_nodeChanging') === true)
+            return this.customError('Player is already changing node, please wait');
 
         if (delay && delay > 0) {
             await new Promise((res) => setTimeout(res, delay));
         }
 
         if (pauseBefore && !player.paused && player.queue.current) {
-            player.pause();
+            await player.pause(true);
         }
 
-        await player.moveNode(targetNode.id);
-        
-        if (resumeAfter && player.paused && player.queue.current) {
-            player.resume();
+        player.set('internal_nodeChanging', true);
+
+        try {
+            const currentTrack = player.queue.current;
+            const lastPosition = player.lastPosition || player.position || 0;
+            const wasPaused = player.paused;
+            const lavalinkVolume = player.lavalinkVolume;
+            const voiceState = {
+                token: player.voice.token,
+                endpoint: player.voice.endpoint,
+                sessionId: player.voice.sessionId,
+            };
+
+            if (player.node.connected) {
+                await player.node.destroyPlayer(player.guildId);
+            }
+
+            player.node = targetNode;
+
+            await targetNode.updatePlayer({
+                guildId: player.guildId,
+                noReplace: false,
+                playerOptions: {
+                    voice: voiceState,
+                    ...(currentTrack && {
+                        track: currentTrack,
+                        position: lastPosition,
+                        volume: lavalinkVolume,
+                        paused: wasPaused,
+                    }),
+                },
+            });
+
+            await player.filterManager.applyPlayerFilters();
+
+            return this.success(true);
+        } catch (e) {
+            return this.customError(`Failed to move node: ${e.message}`);
+        } finally {
+            player.set('internal_nodeChanging', undefined);
         }
-        
-        return this.success(true);
     },
 });
 //# sourceMappingURL=playerMoveNode.js.map
