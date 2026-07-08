@@ -2,9 +2,10 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const forgescript_1 = require("@tryforge/forgescript");
 const index_js_1 = require("../../index.js");
+
 exports.default = new forgescript_1.NativeFunction({
     name: '$playerMoveNode',
-    description: 'Move a player to a different lavalink node without triggering a Discord voice reconnect',
+    description: 'Move a player to a different lavalink node safely by recreating the player instance',
     version: '1.0.0',
     brackets: true,
     unwrap: true,
@@ -72,50 +73,55 @@ exports.default = new forgescript_1.NativeFunction({
         }
 
         try {
-const currentTrack = player.queue.current;
-const lastPosition = player.position || 0;
-const wasPaused = player.paused;
-const currentQueue = [...player.queue.tracks];
+            const currentTrack = player.queue.current;
+            const lastPosition = player.position || 0;
+            const wasPaused = player.paused;
+            const currentQueue = [...player.queue.tracks];
+            
+            const voiceChannelId = player.voiceChannel; 
+            const textChannelId = player.textChannel || ctx.channel?.id;
+            const currentVolume = player.volume || 100;
+            const isSelfDeaf = player.options?.selfDeaf ?? true;
+            const isSelfMuted = player.options?.selfMute ?? false;
 
-if (player.node && player.node.connected) {
-    await player.node.destroyPlayer(player.guildId);
-}
+            if (player.node && player.node.connected) {
+                await player.node.destroyPlayer(player.guildId);
+            }
 
-await new Promise(resolve => setTimeout(resolve, 300));
+            await new Promise(resolve => setTimeout(resolve, 300));
 
-const newPlayer = await linked.createPlayer({
-    guildId: guildId.id,
-    voiceChannelId: voiceId.id,
-    textChannelId: textId?.id || ctx.channel?.id,
-    volume: volume || 100,
-    selfDeaf: selfDeaf || true,
-    selfMute: selfMute || false,
-    node: targetNode.id || undefined,
-});
+            const newPlayer = await linked.createPlayer({
+                guildId: guildId.id,
+                voiceChannelId: voiceChannelId,
+                textChannelId: textChannelId,
+                volume: currentVolume,
+                selfDeaf: isSelfDeaf,
+                selfMute: isSelfMuted,
+                node: targetNode.id,
+            });
 
-await newPlayer.connect();
+            await newPlayer.connect();
 
-if (currentQueue.length > 0) {
-    newPlayer.queue.add(currentQueue);
-}
+            if (currentQueue.length > 0) {
+                newPlayer.queue.add(currentQueue);
+            }
 
-if (currentTrack) {
-    await newPlayer.play({
-        track: currentTrack,
-        start: lastPosition,
-        paused: wasPaused
-    });
-}
+            if (currentTrack) {
+                await newPlayer.play({
+                    track: currentTrack,
+                    start: lastPosition,
+                    paused: wasPaused
+                });
+            }
 
-if (typeof newPlayer.filterManager?.applyPlayerFilters === 'function') {
-    await new Promise(res => setTimeout(res, 200));
-    await newPlayer.filterManager.applyPlayerFilters();
-}
+            if (typeof newPlayer.filterManager?.applyPlayerFilters === 'function') {
+                await new Promise(res => setTimeout(res, 200));
+                await newPlayer.filterManager.applyPlayerFilters();
+            }
+
+            return this.success(true);
         } catch (e) {
             return this.customError(`Failed to move node: ${e.message}`);
-        } finally {
-            player.set('internal_nodeChanging', undefined);
         }
     },
-});
-//# sourceMappingURL=playerMoveNode.js.map
+})
