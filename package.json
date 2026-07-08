@@ -30,7 +30,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "lavalink-client": "^2.9.7",
+    "lavalink-client": "^2.10.3",
     "opusscript": "^0.1.1",
     "tiny-typed-emitter": "^2.1.0"
   }
