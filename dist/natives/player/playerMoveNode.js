@@ -63,9 +63,6 @@ exports.default = new forgescript_1.NativeFunction({
         if (!player.voice?.endpoint || !player.voice?.sessionId || !player.voice?.token)
             return this.customError('Voice state is missing, cannot move node');
 
-        if (player.get('internal_nodeChanging') === true)
-            return this.customError('Player is already changing node, please wait');
-
         if (pauseBefore && !player.paused && player.queue.current) {
             await player.pause(true);
         }
@@ -93,7 +90,7 @@ const newPlayer = await linked.createPlayer({
     volume: volume || 100,
     selfDeaf: selfDeaf || true,
     selfMute: selfMute || false,
-    node: nodeId || undefined,
+    node: targetNode.id || undefined,
 });
 
 await newPlayer.connect();
