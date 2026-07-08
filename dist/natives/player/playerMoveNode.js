@@ -37,9 +37,16 @@ exports.default = new forgescript_1.NativeFunction({
             required: false,
             rest: false,
         },
+        {
+            name: 'resumeAfter',
+            description: 'Whether to resume the player after moving',
+            type: forgescript_1.ArgType.Boolean,
+            required: false,
+            rest: false,
+        },
     ],
     output: forgescript_1.ArgType.Boolean,
-    async execute(ctx, [guildId, nodeId, delay, pauseBefore]) {
+    async execute(ctx, [guildId, nodeId, delay, pauseBefore, resumeAfter]) {
         const linked = ctx.client.getExtension(index_js_1.ForgeLinked, true).lavalink;
         if (!linked)
             return this.customError('ForgeLinked is not initialized');
@@ -63,11 +70,15 @@ exports.default = new forgescript_1.NativeFunction({
         }
 
         if (pauseBefore && !player.paused && player.queue.current) {
-            await player.pause(true);
+            player.pause();
         }
 
         await player.moveNode(targetNode);
-
+        
+        if (resumeAfter && player.paused && player.queue.current) {
+            player.resume();
+        }
+        
         return this.success(true);
     },
 });
