@@ -64,15 +64,36 @@ exports.default = new forgescript_1.NativeFunction({
         const linked = ctx.client.getExtension(index_js_1.ForgeLinked, true).lavalink;
         if (!linked)
             return this.customError('ForgeLinked is not initialized');
-        linked.createPlayer({
+
+        const player = linked.createPlayer({
             guildId: guildId.id,
             voiceChannelId: voiceId.id,
             textChannelId: textId?.id || ctx.channel?.id,
             volume: volume || 100,
-            selfDeaf: selfDeaf || true,
-            selfMute: selfMute || false,
+            selfDeaf: selfDeaf ?? true,
+            selfMute: selfMute ?? false,
             node: node || undefined,
         });
+
+        if (player) {
+            setTimeout(async () => {
+                if (player.voice && player.node) {
+                    await player.node.updatePlayer({
+                        guildId: player.guildId,
+                        noReplace: false,
+                        playerOptions: {
+                            voice: {
+                                token: player.voice.token,
+                                endpoint: player.voice.endpoint,
+                                sessionId: player.voice.sessionId,
+                                channelId: player.voice.channelId,
+                            }
+                        }
+                    }).catch(() => null);
+                }
+            }, 500);
+        }
+
         return this.success(linked.players.has(guildId.id));
     },
 });
