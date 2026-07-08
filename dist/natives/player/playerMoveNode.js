@@ -76,41 +76,47 @@ exports.default = new forgescript_1.NativeFunction({
 
         player.set('internal_nodeChanging', true);
 
-        try {
-            const currentTrack = player.queue.current;
-            const lastPosition = player.lastPosition || player.position || 0;
-            const wasPaused = player.paused;
-            const lavalinkVolume = player.lavalinkVolume;
-            const voiceState = {
-                token: player.voice.token,
-                endpoint: player.voice.endpoint,
-                sessionId: player.voice.sessionId,
-            };
+try {
+    const currentTrack = player.queue.current;
+    const lastPosition = player.lastPosition || player.position || 0;
+    const wasPaused = player.paused;
+    const lavalinkVolume = player.lavalinkVolume;
+    
+    const voiceState = {
+        token: player.voice.token,
+        endpoint: player.voice.endpoint,
+        sessionId: player.voice.sessionId,
+    };
 
-            if (player.node.connected) {
-                await player.node.destroyPlayer(player.guildId);
-            }
+    if (player.node && player.node.connected) {
+        await player.node.destroyPlayer(player.guildId);
+    }
 
-            player.node = targetNode;
+    player.node = targetNode;
 
-            await targetNode.updatePlayer({
-                guildId: player.guildId,
-                noReplace: false,
-                playerOptions: {
-                    voice: voiceState,
-                    ...(currentTrack && {
-                        track: currentTrack,
-                        position: lastPosition,
-                        volume: lavalinkVolume,
-                        paused: wasPaused,
-                    }),
-                },
-            });
+    if (player.voice) {
+        player.voice.initialized = false; 
+    }
 
-            await player.filterManager.applyPlayerFilters();
+    await targetNode.updatePlayer({
+        guildId: player.guildId,
+        noReplace: false,
+        playerOptions: {
+            voice: voiceState,
+            ...(currentTrack && {
+                track: currentTrack,
+                position: lastPosition,
+                volume: lavalinkVolume,
+                paused: wasPaused,
+            }),
+        },
+    });
 
-            return this.success(true);
-        } catch (e) {
+    await new Promise((res) => setTimeout(res, 100));
+    await player.filterManager.applyPlayerFilters();
+
+    return this.success(true);
+} catch (e) {
             return this.customError(`Failed to move node: ${e.message}`);
         } finally {
             player.set('internal_nodeChanging', undefined);
