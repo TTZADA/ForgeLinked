@@ -24,6 +24,13 @@ exports.default = new forgescript_1.NativeFunction({
             rest: false,
         },
         {
+            name: 'delay',
+            description: 'Delay in milliseconds before moving the node',
+            type: forgescript_1.ArgType.Number,
+            required: false,
+            rest: false,
+        },
+        {
             name: 'pauseBefore',
             description: 'Whether to pause the player before moving',
             type: forgescript_1.ArgType.Boolean,
@@ -32,7 +39,7 @@ exports.default = new forgescript_1.NativeFunction({
         },
     ],
     output: forgescript_1.ArgType.Boolean,
-    async execute(ctx, [guildId, nodeId, pauseBefore]) {
+    async execute(ctx, [guildId, nodeId, delay, pauseBefore]) {
         const linked = ctx.client.getExtension(index_js_1.ForgeLinked, true).lavalink;
         if (!linked)
             return this.customError('ForgeLinked is not initialized');
@@ -61,6 +68,10 @@ exports.default = new forgescript_1.NativeFunction({
 
         if (pauseBefore && !player.paused && player.queue.current) {
             await player.pause(true);
+        }
+
+        if (delay && delay > 0) {
+            await new Promise((res) => setTimeout(res, delay));
         }
 
         player.set('internal_nodeChanging', true);
