@@ -92,26 +92,27 @@ async execute(ctx, [guildId, voiceId, textId, volume, selfDeaf, selfMute, node])
             };
             check();
         }).catch(() => null);
-
-if (
-    player.voice?.token &&
-    player.voice?.endpoint &&
-    player.voice?.sessionId &&
-    node.includes('Premium')
-) {
-    await player.node.updatePlayer({
-        guildId: player.guildId,
-        noReplace: false,
-        playerOptions: {
-            voice: {
-                token: player.voice.token,
-                endpoint: player.voice.endpoint,
-                sessionId: player.voice.sessionId,
-                channelId: player.voice.channelId,
+    }
+    
+    if (
+        player.voice?.token &&
+        player.voice?.endpoint &&
+        player.voice?.sessionId &&
+        player.node?.options?.id?.includes('Premium')
+    ) {
+        await player.node.updatePlayer({
+            guildId: player.guildId,
+            noReplace: false,
+            playerOptions: {
+                voice: {
+                    token: player.voice.token,
+                    endpoint: player.voice.endpoint,
+                    sessionId: player.voice.sessionId,
+                    channelId: player.voice.channelId,
+                }
             }
-        }
-    }).catch(() => null);
-}
+        }).catch(() => null);
+    }
 
     return this.success(linked.players.has(guildId.id));
 },
