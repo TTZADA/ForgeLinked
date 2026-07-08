@@ -82,12 +82,6 @@ try {
     const wasPaused = player.paused;
     const lavalinkVolume = player.lavalinkVolume;
     
-    const voiceState = {
-        token: player.voice.token,
-        endpoint: player.voice.endpoint,
-        sessionId: player.voice.sessionId,
-    };
-
     if (player.node && player.node.connected) {
         await player.node.destroyPlayer(player.guildId);
     }
@@ -95,8 +89,22 @@ try {
     player.node = targetNode;
 
     if (player.voice) {
-        player.voice.initialized = false; 
+        if (typeof player.voice.destroy === 'function') {
+            player.voice.destroy();
+        }
+        player.voice.token = null;
+        player.voice.endpoint = null;
     }
+
+    await ctx.client.guilds.cache.get(guildId.id)?.members.me?.voice.setChannel(player.voiceChannel);
+
+    await new Promise((res) => setTimeout(res, 500));
+
+    const voiceState = {
+        token: player.voice.token,
+        endpoint: player.voice.endpoint,
+        sessionId: player.voice.sessionId,
+    };
 
     await targetNode.updatePlayer({
         guildId: player.guildId,
@@ -111,9 +119,6 @@ try {
             }),
         },
     });
-
-    await new Promise((res) => setTimeout(res, 100));
-    await player.filterManager.applyPlayerFilters();
 
     return this.success(true);
 } catch (e) {
