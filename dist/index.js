@@ -231,6 +231,16 @@ class ForgeLinked extends forgescript_1.ForgeExtension {
                 if (Object.keys(db).length > 0) {
                     await this._restorePlayers();
                 }
+
+                for (const player of this.lavalink.players.values()) {
+                    if (player.voiceChannelId && !player.queue.current && !player.queue.tracks.length) {
+                        try {
+                            await player.connect();
+                        } catch (e) {
+                            forgescript_1.Logger.error(`[ForgeLinked] Failed to reconnect idle player for ${player.guildId}: ${e.message}`);
+                        }
+                    }
+                }
             });
 
             setInterval(() => {
