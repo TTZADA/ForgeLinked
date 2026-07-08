@@ -5,7 +5,7 @@ const index_js_1 = require("../../index.js");
 
 exports.default = new forgescript_1.NativeFunction({
     name: '$playerMoveNode',
-    description: 'Move a player to a different lavalink node safely',
+    description: 'Move a player to a different lavalink node safely without breaking Android Call Mode',
     version: '1.0.0',
     brackets: true,
     unwrap: true,
@@ -62,7 +62,10 @@ exports.default = new forgescript_1.NativeFunction({
             return this.success(false);
 
         if (!player.voice?.endpoint || !player.voice?.sessionId || !player.voice?.token)
-            return this.customError('Voice state is missing, cannot move node');
+            return this.customError('Voice data is missing, cannot move node');
+
+        if (player.getData("internal_nodeChanging") === true)
+            return this.customError('Player is already changing node');
 
         if (pauseBefore && !player.paused && player.queue.current) {
             await player.pause(true);
@@ -73,73 +76,62 @@ exports.default = new forgescript_1.NativeFunction({
         }
 
         try {
-            if (typeof player.changeNode === 'function') {
-                await player.changeNode(targetNode);
-                return this.success(true);
-            }
+            player.setData("internal_nodeChanging", true);
 
             const currentTrack = player.queue.current;
             const lastPosition = player.position || 0;
             const wasPaused = player.paused;
-            const currentQueue = [...player.queue.tracks];
-            
-            const voiceChannelId = player.voiceChannel; 
-            const textChannelId = player.textChannel || ctx.channel?.id;
-            const currentVolume = player.volume || 100;
-            const isSelfDeaf = player.options?.selfDeaf ?? true;
-            const isSelfMuted = player.options?.selfMute ?? false;
-
-            const voiceState = {
-                sessionId: player.voice.sessionId,
-                event: {
-                    token: player.voice.token,
-                    endpoint: player.voice.endpoint,
-                }
-            };
+            const currentVolume = player.lavalinkVolume || player.volume || 100;
 
             if (player.node && player.node.connected) {
-                await player.node.destroyPlayer(guildId.id).catch(() => null);
+                await player.node.destroyPlayer(player.guildId).catch(() => null);
             }
 
-            const newPlayer = await linked.createPlayer({
-                guildId: guildId.id,
-                voiceChannelId: voiceChannelId,
-                textChannelId: textChannelId,
-                volume: currentVolume,
-                selfDeaf: isSelfDeaf,
-                selfMute: isSelfMuted,
-                node: targetNode.id,
+            player.node = targetNode;
+            const now = performance.now();
+
+            const hasSponsorBlock = !targetNode._checkForPlugins || targetNode.info?.plugins?.find((v) => v.name === "sponsorblock-plugin");
+            if (hasSponsorBlock && typeof player.setSponsorBlock === 'function') {
+                const sponsorBlockCategories = player.getData("internal_sponsorBlockCategories");
+                if (Array.isArray(sponsorBlockCategories) && sponsorBlockCategories.length) {
+                    await player.setSponsorBlock(sponsorBlockCategories).catch(() => null);
+                } else if (player.LavalinkManager?.options?.playerOptions?.enforceSponsorBlockRequestForEventEnablement !== false) {
+                    await player.setSponsorBlock().catch(() => null);
+                }
+            }
+
+            await targetNode.updatePlayer({
+                guildId: player.guildId,
+                noReplace: false,
+                playerOptions: {
+                    ...(currentTrack && {
+                        track: currentTrack,
+                        position: lastPosition,
+                        volume: currentVolume,
+                        paused: wasPaused,
+                    }),
+                    voice: {
+                        token: player.voice.token,
+                        endpoint: player.voice.endpoint,
+                        sessionId: player.voice.sessionId,
+                        channelId: player.voice.channelId,
+                    },
+                },
             });
 
-            if (newPlayer.node && typeof newPlayer.node.send === 'function') {
-                await newPlayer.node.send({
-                    op: "voiceUpdate",
-                    guildId: guildId.id,
-                    ...voiceState
-                });
-            } else if (typeof newPlayer.setVoiceState === 'function') {
-                await newPlayer.setVoiceState(voiceState);
-            } else if (newPlayer.voice) {
-                Object.assign(newPlayer.voice, voiceState.event);
-                newPlayer.voice.sessionId = voiceState.sessionId;
-                await newPlayer.connect();
+            if (player.filterManager && typeof player.filterManager.applyPlayerFilters === 'function') {
+                player.filterManager.applyPlayerFilters();
             }
 
-            if (currentQueue.length > 0) {
-                newPlayer.queue.add(currentQueue);
-            }
-
-            if (currentTrack) {
-                await newPlayer.play({
-                    track: currentTrack,
-                    start: lastPosition,
-                    paused: wasPaused
-                });
+            if (player.ping) {
+                player.ping.lavalink = Math.round((performance.now() - now) / 10) / 100;
             }
 
             return this.success(true);
         } catch (e) {
-            return this.customError(`Failed to move node: ${e.message}`);
+            return this.customError(`Failed to move node safely: ${e.message}`);
+        } finally {
+            player.setData("internal_nodeChanging", undefined);
         }
     },
 });
