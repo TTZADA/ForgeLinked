@@ -65,6 +65,10 @@ exports.default = new forgescript_1.NativeFunction({
         if (!linked)
             return this.customError('ForgeLinked is not initialized');
 
+        const targetNode = node 
+            ? linked.nodeManager.nodes.get(node) 
+            : linked.nodeManager.leastUsedNodes('playingPlayers')[0];
+
         const player = linked.createPlayer({
             guildId: guildId.id,
             voiceChannelId: voiceId.id,
@@ -72,26 +76,15 @@ exports.default = new forgescript_1.NativeFunction({
             volume: volume || 100,
             selfDeaf: selfDeaf ?? true,
             selfMute: selfMute ?? false,
-            node: node || undefined,
+            node: targetNode?.options?.id || undefined,
         });
 
-        if (player) {
-            setTimeout(async () => {
-                if (player.voice && player.node) {
-                    await player.node.updatePlayer({
-                        guildId: player.guildId,
-                        noReplace: false,
-                        playerOptions: {
-                            voice: {
-                                token: player.voice.token,
-                                endpoint: player.voice.endpoint,
-                                sessionId: player.voice.sessionId,
-                                channelId: player.voice.channelId,
-                            }
-                        }
-                    }).catch(() => null);
-                }
-            }, 500);
+        if (player && player.voice) {
+            player.voice.daveProtocol = false;
+            
+            if (player.voice.options) {
+                player.voice.options.forceMediaMode = true; 
+            }
         }
 
         return this.success(linked.players.has(guildId.id));
