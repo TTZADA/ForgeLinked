@@ -5,7 +5,7 @@ const index_js_1 = require("../../index.js");
 
 exports.default = new forgescript_1.NativeFunction({
     name: '$playerMoveNode',
-    description: 'Move a player to a different lavalink node safely without breaking Android Call Mode',
+    description: 'Move a player to a different lavalink node safely supporting DAVE protocol',
     version: '1.0.0',
     brackets: true,
     unwrap: true,
@@ -64,9 +64,6 @@ exports.default = new forgescript_1.NativeFunction({
         if (!player.voice?.endpoint || !player.voice?.sessionId || !player.voice?.token)
             return this.customError('Voice data is missing, cannot move node');
 
-        if (player.getData("internal_nodeChanging") === true)
-            return this.customError('Player is already changing node');
-
         if (pauseBefore && !player.paused && player.queue.current) {
             await player.pause(true);
         }
@@ -76,62 +73,44 @@ exports.default = new forgescript_1.NativeFunction({
         }
 
         try {
-            player.setData("internal_nodeChanging", true);
-
             const currentTrack = player.queue.current;
-            const lastPosition = player.position || 0;
+            const lastPosition = player.lastPosition || player.position || 0;
             const wasPaused = player.paused;
-            const currentVolume = player.lavalinkVolume || player.volume || 100;
+            const lavalinkVolume = player.lavalinkVolume || player.volume || 100;
+            
+            const voiceState = {
+                token: player.voice.token,
+                endpoint: player.voice.endpoint,
+                sessionId: player.voice.sessionId,
+            };
 
             if (player.node && player.node.connected) {
                 await player.node.destroyPlayer(player.guildId).catch(() => null);
             }
 
             player.node = targetNode;
-            const now = performance.now();
 
-            const hasSponsorBlock = !targetNode._checkForPlugins || targetNode.info?.plugins?.find((v) => v.name === "sponsorblock-plugin");
-            if (hasSponsorBlock && typeof player.setSponsorBlock === 'function') {
-                const sponsorBlockCategories = player.getData("internal_sponsorBlockCategories");
-                if (Array.isArray(sponsorBlockCategories) && sponsorBlockCategories.length) {
-                    await player.setSponsorBlock(sponsorBlockCategories).catch(() => null);
-                } else if (player.LavalinkManager?.options?.playerOptions?.enforceSponsorBlockRequestForEventEnablement !== false) {
-                    await player.setSponsorBlock().catch(() => null);
-                }
+            if (player.voice) {
+                player.voice.initialized = false; 
             }
 
             await targetNode.updatePlayer({
                 guildId: player.guildId,
                 noReplace: false,
                 playerOptions: {
+                    voice: voiceState,
                     ...(currentTrack && {
                         track: currentTrack,
                         position: lastPosition,
-                        volume: currentVolume,
+                        volume: lavalinkVolume,
                         paused: wasPaused,
                     }),
-                    voice: {
-                        token: player.voice.token,
-                        endpoint: player.voice.endpoint,
-                        sessionId: player.voice.sessionId,
-                        channelId: player.voice.channelId,
-                    },
                 },
             });
 
-            if (player.filterManager && typeof player.filterManager.applyPlayerFilters === 'function') {
-                player.filterManager.applyPlayerFilters();
-            }
-
-            if (player.ping) {
-                player.ping.lavalink = Math.round((performance.now() - now) / 10) / 100;
-            }
-
             return this.success(true);
         } catch (e) {
-            return this.customError(`Failed to move node safely: ${e.message}`);
-        } finally {
-            player.setData("internal_nodeChanging", undefined);
+            return this.customError(`Failed to move node: ${e.message}`);
         }
     },
 });
