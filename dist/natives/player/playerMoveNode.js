@@ -40,43 +40,77 @@ exports.default = new forgescript_1.NativeFunction({
         },
     ],
     output: forgescript_1.ArgType.Boolean,
-    async execute(ctx, [guildId, nodeId, delay, pauseBefore]) {
-        const linked = ctx.client.getExtension(index_js_1.ForgeLinked, true).lavalink;
-        if (!linked)
-            return this.customError('ForgeLinked is not initialized');
+async execute(ctx, [guildId, nodeId, delay, pauseBefore]) {
+    const linked = ctx.client.getExtension(index_js_1.ForgeLinked, true).lavalink;
+    if (!linked)
+        return this.customError('ForgeLinked is not initialized');
 
-        const player = linked.getPlayer(guildId.id);
-        if (!player)
-            return this.customError('No player found for this guild');
+    const player = linked.getPlayer(guildId.id);
+    if (!player)
+        return this.customError('No player found for this guild');
 
-        const targetNode = nodeId
-            ? linked.nodeManager.nodes.get(nodeId)
-            : Array.from(linked.nodeManager.leastUsedNodes('playingPlayers')).find(
-                (n) => n.connected && n.options.id !== player.node?.options?.id
-              );
+    const targetNode = nodeId
+        ? linked.nodeManager.nodes.get(nodeId)
+        : Array.from(linked.nodeManager.leastUsedNodes('playingPlayers')).find(
+            (n) => n.connected && n.options.id !== player.node?.options?.id
+          );
 
-        if (!targetNode || !targetNode.connected)
-            return this.customError('Target node not found or unavailable');
+    if (!targetNode || !targetNode.connected)
+        return this.customError('Target node not found or unavailable');
 
-        if (targetNode.id === player.node?.id)
-            return this.success(false);
+    if (targetNode.id === player.node?.id)
+        return this.success(false);
 
-        if (!player.voice?.endpoint || !player.voice?.sessionId || !player.voice?.token)
-            return this.customError('Voice data is missing, cannot move node');
+    if (pauseBefore && !player.paused && player.queue.current) {
+        await player.pause(true);
+    }
 
-        if (pauseBefore && !player.paused && player.queue.current) {
-            await player.pause(true);
+    if (delay && delay > 0) {
+        await new Promise(r => setTimeout(r, delay));
+    }
+
+    try {
+        const currentTrack = player.queue.current;
+        const lastPosition = player.position || 0;
+        const wasPaused = player.paused;
+        const currentQueue = [...player.queue.tracks];
+        const voiceChannelId = player.voiceChannelId;
+        const textChannelId = player.textChannelId;
+        const currentVolume = player.volume;
+        const selfDeaf = player.options?.selfDeaf ?? true;
+        const selfMute = player.options?.selfMute ?? false;
+
+        await player.destroy(true);
+
+        await new Promise(r => setTimeout(r, 500));
+
+        const newPlayer = await linked.createPlayer({
+            guildId: guildId.id,
+            voiceChannelId,
+            textChannelId,
+            volume: currentVolume,
+            selfDeaf,
+            selfMute,
+            node: targetNode.id,
+        });
+
+        await newPlayer.connect();
+
+        if (currentQueue.length > 0) {
+            newPlayer.queue.add(currentQueue);
         }
-        
-        if (delay && delay > 0) {
-            await new Promise((res) => setTimeout(res, delay));
+
+        if (currentTrack) {
+            await newPlayer.play({
+                track: currentTrack,
+                startTime: lastPosition,
+                paused: wasPaused,
+            });
         }
 
-        try {
-            await player.changeNode(targetNode, false);
-            return this.success(true);
-        } catch (e) {
-            return this.customError(`Failed to move node: ${e.message}`);
-        }
-    },
+        return this.success(true);
+    } catch (e) {
+        return this.customError(`Failed to move node: ${e.message}`);
+    }
+},
 });
