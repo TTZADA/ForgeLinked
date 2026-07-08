@@ -5,7 +5,7 @@ const index_js_1 = require("../../index.js");
 
 exports.default = new forgescript_1.NativeFunction({
     name: '$playerMoveNode',
-    description: 'Move a player to a different lavalink node safely by recreating the player instance',
+    description: 'Move a player to a different lavalink node safely',
     version: '1.0.0',
     brackets: true,
     unwrap: true,
@@ -84,12 +84,10 @@ exports.default = new forgescript_1.NativeFunction({
             const isSelfDeaf = player.options?.selfDeaf ?? true;
             const isSelfMuted = player.options?.selfMute ?? false;
 
-            if (player.node && player.node.connected) {
-                await player.node.destroyPlayer(player.guildId);
-            }
+            const oldNode = player.node;
 
             const newPlayer = await linked.createPlayer({
-                guildId: guildId,
+                guildId: guildId.id,
                 voiceChannelId: voiceChannelId,
                 textChannelId: textChannelId,
                 volume: currentVolume,
@@ -98,7 +96,19 @@ exports.default = new forgescript_1.NativeFunction({
                 node: targetNode.id,
             });
 
-            await newPlayer.connect();
+            if (oldNode && oldNode.connected) {
+                await oldNode.send({ op: "destroy", guildId: guildId.id });
+            }
+
+            await newPlayer.node.send({
+                op: "voiceUpdate",
+                guildId: guildId.id,
+                sessionId: player.voice.sessionId,
+                event: {
+                    token: player.voice.token,
+                    endpoint: player.voice.endpoint,
+                }
+            });
 
             if (currentQueue.length > 0) {
                 newPlayer.queue.add(currentQueue);
@@ -117,4 +127,4 @@ exports.default = new forgescript_1.NativeFunction({
             return this.customError(`Failed to move node: ${e.message}`);
         }
     },
-})
+});
