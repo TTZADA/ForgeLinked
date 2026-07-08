@@ -82,6 +82,7 @@ exports.default = new forgescript_1.NativeFunction({
                 token: player.voice.token,
                 endpoint: player.voice.endpoint,
                 sessionId: player.voice.sessionId,
+                channelId: player.voice.channelId || player.channelId
             };
 
             if (player.node && player.node.connected) {
