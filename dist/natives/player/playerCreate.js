@@ -78,11 +78,11 @@ async execute(ctx, [guildId, voiceId, textId, volume, selfDeaf, selfMute, node])
     const player = linked.players.get(guildId.id);
     if (!player)
         return this.success(false);
-    
-    await player.disconnect(true);
-    await new Promise(r => setTimeout(r, 300));
-    await player.connect();
 
+if (node.includes('Premium')) {
+    await player.changeNode(node)
+}
+        
     return this.success(linked.players.has(guildId.id));
 },
 });
