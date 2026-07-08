@@ -78,41 +78,12 @@ async execute(ctx, [guildId, voiceId, textId, volume, selfDeaf, selfMute, node])
     const player = linked.players.get(guildId.id);
     if (!player)
         return this.success(false);
-
-    if (!player.voice?.token || !player.voice?.endpoint || !player.voice?.sessionId) {
-        await new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => reject(new Error('Voice state timeout')), 5000);
-            const check = () => {
-                if (player.voice?.token && player.voice?.endpoint && player.voice?.sessionId) {
-                    clearTimeout(timeout);
-                    resolve();
-                } else {
-                    setTimeout(check, 50);
-                }
-            };
-            check();
-        }).catch(() => null);
-    }
     
-    if (
-        player.voice?.token &&
-        player.voice?.endpoint &&
-        player.voice?.sessionId &&
-        node.includes('Premium')
-    ) {
-        await player.node.updatePlayer({
-            guildId: player.guildId,
-            noReplace: false,
-            playerOptions: {
-                voice: {
-                    token: player.voice.token,
-                    endpoint: player.voice.endpoint,
-                    sessionId: player.voice.sessionId,
-                    channelId: player.voice.channelId,
-                }
-            }
-        }).catch(() => null);
-    }
+if (node.includes('Premium')) {
+    await player.disconnect(true);
+    await new Promise(r => setTimeout(r, 300));
+    await player.connect();
+}
 
     return this.success(linked.players.has(guildId.id));
 },
