@@ -73,6 +73,11 @@ exports.default = new forgescript_1.NativeFunction({
         }
 
         try {
+            if (typeof player.changeNode === 'function') {
+                await player.changeNode(targetNode);
+                return this.success(true);
+            }
+
             const currentTrack = player.queue.current;
             const lastPosition = player.position || 0;
             const wasPaused = player.paused;
@@ -84,7 +89,17 @@ exports.default = new forgescript_1.NativeFunction({
             const isSelfDeaf = player.options?.selfDeaf ?? true;
             const isSelfMuted = player.options?.selfMute ?? false;
 
-            const oldNode = player.node;
+            const voiceState = {
+                sessionId: player.voice.sessionId,
+                event: {
+                    token: player.voice.token,
+                    endpoint: player.voice.endpoint,
+                }
+            };
+
+            if (player.node && player.node.connected) {
+                await player.node.destroyPlayer(guildId.id).catch(() => null);
+            }
 
             const newPlayer = await linked.createPlayer({
                 guildId: guildId.id,
@@ -96,19 +111,19 @@ exports.default = new forgescript_1.NativeFunction({
                 node: targetNode.id,
             });
 
-            if (oldNode && oldNode.connected) {
-                await oldNode.send({ op: "destroy", guildId: guildId.id });
+            if (newPlayer.node && typeof newPlayer.node.send === 'function') {
+                await newPlayer.node.send({
+                    op: "voiceUpdate",
+                    guildId: guildId.id,
+                    ...voiceState
+                });
+            } else if (typeof newPlayer.setVoiceState === 'function') {
+                await newPlayer.setVoiceState(voiceState);
+            } else if (newPlayer.voice) {
+                Object.assign(newPlayer.voice, voiceState.event);
+                newPlayer.voice.sessionId = voiceState.sessionId;
+                await newPlayer.connect();
             }
-
-            await newPlayer.node.send({
-                op: "voiceUpdate",
-                guildId: guildId.id,
-                sessionId: player.voice.sessionId,
-                event: {
-                    token: player.voice.token,
-                    endpoint: player.voice.endpoint,
-                }
-            });
 
             if (currentQueue.length > 0) {
                 newPlayer.queue.add(currentQueue);
