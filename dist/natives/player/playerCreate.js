@@ -60,34 +60,60 @@ exports.default = new forgescript_1.NativeFunction({
         },
     ],
     output: forgescript_1.ArgType.Boolean,
-    async execute(ctx, [guildId, voiceId, textId, volume, selfDeaf, selfMute, node]) {
-        const linked = ctx.client.getExtension(index_js_1.ForgeLinked, true).lavalink;
-        if (!linked)
-            return this.customError('ForgeLinked is not initialized');
+async execute(ctx, [guildId, voiceId, textId, volume, selfDeaf, selfMute, node]) {
+    const linked = ctx.client.getExtension(index_js_1.ForgeLinked, true).lavalink;
+    if (!linked)
+        return this.customError('ForgeLinked is not initialized');
 
-        const targetNode = node 
-            ? linked.nodeManager.nodes.get(node) 
-            : linked.nodeManager.leastUsedNodes('playingPlayers')[0];
+    linked.createPlayer({
+        guildId: guildId.id,
+        voiceChannelId: voiceId.id,
+        textChannelId: textId?.id || ctx.channel?.id,
+        volume: volume || 100,
+        selfDeaf: selfDeaf ?? true,
+        selfMute: selfMute || false,
+        node: node || undefined,
+    });
 
-        const player = linked.createPlayer({
-            guildId: guildId.id,
-            voiceChannelId: voiceId.id,
-            textChannelId: textId?.id || ctx.channel?.id,
-            volume: volume || 100,
-            selfDeaf: selfDeaf ?? true,
-            selfMute: selfMute ?? false,
-            node: targetNode?.options?.id || undefined,
-        });
+    const player = linked.players.get(guildId.id);
+    if (!player)
+        return this.success(false);
 
-        if (player && player.voice) {
-            player.voice.daveProtocol = false;
-            
-            if (player.voice.options) {
-                player.voice.options.forceMediaMode = true; 
+    if (!player.voice?.token || !player.voice?.endpoint || !player.voice?.sessionId) {
+        await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error('Voice state timeout')), 5000);
+            const check = () => {
+                if (player.voice?.token && player.voice?.endpoint && player.voice?.sessionId) {
+                    clearTimeout(timeout);
+                    resolve();
+                } else {
+                    setTimeout(check, 50);
+                }
+            };
+            check();
+        }).catch(() => null);
+
+if (
+    player.voice?.token &&
+    player.voice?.endpoint &&
+    player.voice?.sessionId &&
+    node.includes('Premium')
+) {
+    await player.node.updatePlayer({
+        guildId: player.guildId,
+        noReplace: false,
+        playerOptions: {
+            voice: {
+                token: player.voice.token,
+                endpoint: player.voice.endpoint,
+                sessionId: player.voice.sessionId,
+                channelId: player.voice.channelId,
             }
         }
+    }).catch(() => null);
+}
 
-        return this.success(linked.players.has(guildId.id));
-    },
+    return this.success(linked.players.has(guildId.id));
+},
 });
 //# sourceMappingURL=playerCreate.js.map
