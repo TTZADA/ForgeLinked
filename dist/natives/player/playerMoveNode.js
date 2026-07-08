@@ -67,7 +67,7 @@ exports.default = new forgescript_1.NativeFunction({
         if (pauseBefore && !player.paused && player.queue.current) {
             await player.pause(true);
         }
-
+        
         if (delay && delay > 0) {
             await new Promise((res) => setTimeout(res, delay));
         }
@@ -90,6 +90,8 @@ exports.default = new forgescript_1.NativeFunction({
             }
 
             player.node = targetNode;
+
+            await new Promise((res) => setTimeout(res, 750));
 
             if (player.voice) {
                 player.voice.initialized = false; 
